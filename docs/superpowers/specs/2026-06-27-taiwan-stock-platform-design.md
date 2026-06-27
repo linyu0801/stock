@@ -20,7 +20,6 @@
 | 項目 | 技術 |
 |------|------|
 | Workspace | pnpm workspaces |
-| 建置編排 | Turborepo |
 
 ### 後端
 | 項目 | 技術 |
@@ -140,10 +139,48 @@ shared/api    Infrastructure      HTTP client，只知道後端 schema
 GET  /api/stock/{id}/history?period=3m          # K 線歷史資料（OHLCV）
 GET  /api/stock/{id}/indicators?type=bias&n=20  # 技術指標
 GET  /api/stock/{id}/info                       # 基本資訊（股名、現價）
-GET  /api/watchlist                             # 取得自選股清單
-POST /api/watchlist                             # 新增自選股
-DELETE /api/watchlist/{id}                      # 刪除自選股
+
+GET    /api/watchlist                           # 取得所有分組與股票
+POST   /api/watchlist/groups                    # 新增分組
+DELETE /api/watchlist/groups/{group_id}         # 刪除分組
+PATCH  /api/watchlist/groups/{group_id}         # 重新命名分組
+
+POST   /api/watchlist/stocks                    # 新增單一股票至指定分組
+POST   /api/watchlist/stocks/batch              # 批次新增股票（可跨分組）
+DELETE /api/watchlist/stocks/{stock_id}         # 刪除股票
+PATCH  /api/watchlist/stocks/{stock_id}         # 移動股票至其他分組
+
 POST /api/backtest                              # 執行回測
+```
+
+### 批次新增格式（`POST /api/watchlist/stocks/batch`）
+
+```json
+{
+  "stocks": [
+    { "symbol": "2330", "group": "半導體" },
+    { "symbol": "2454", "group": "半導體" },
+    { "symbol": "2882", "group": "金融股" }
+  ]
+}
+```
+
+- `group` 若不存在則自動建立
+- 重複的 symbol 在同一分組內會被忽略（不報錯）
+
+### 資料結構（SQLite）
+
+```
+groups
+  id        INTEGER PK
+  name      TEXT UNIQUE
+  order     INTEGER        # 顯示排序
+
+stocks
+  id        INTEGER PK
+  symbol    TEXT           # 例：2330
+  group_id  INTEGER FK → groups.id
+  added_at  DATETIME
 ```
 
 ---
@@ -163,8 +200,9 @@ POST /api/backtest                              # 執行回測
 ## 頁面規劃
 
 ### `/` 首頁
-- 自選股清單，顯示每支股票的今日收盤價與漲跌幅
-- 可新增 / 刪除自選股（輸入股票代碼）
+- 自選股依分組顯示，每組可展開 / 收合
+- 每支股票顯示今日收盤價與漲跌幅
+- 可新增 / 刪除分組、新增 / 刪除 / 移動股票
 
 ### `/stock/$id` 個股頁面
 - 主圖：K 線圖（OHLCV），可選 1M / 3M / 6M / 1Y / 5Y
@@ -180,7 +218,7 @@ POST /api/backtest                              # 執行回測
 ## 開發階段
 
 ### Phase 1 — 基礎看盤
-- [ ] Monorepo 初始化（pnpm workspaces + Turborepo）
+- [ ] Monorepo 初始化（pnpm workspaces）
 - [ ] FastAPI 後端起手，接通 yfinance 日線資料
 - [ ] `packages/api-client` 建立，定義 zod schema
 - [ ] `apps/web` Vite + TanStack Router + FSD 目錄結構
@@ -189,8 +227,9 @@ POST /api/backtest                              # 執行回測
 
 ### Phase 2 — 自選股管理
 - [ ] 自選股 CRUD（SQLite 儲存）
-- [ ] `features/add-to-watchlist`、`features/remove-from-watchlist`
-- [ ] 首頁 `widgets/watchlist-section`
+- [ ] 自選股分組 CRUD + 批次新增 API
+- [ ] `features/add-to-watchlist`、`features/remove-from-watchlist`、`features/manage-groups`
+- [ ] 首頁 `widgets/watchlist-section`（分組可展開 / 收合）
 
 ### Phase 3 — 基礎回測
 - [ ] 乖離率買賣訊號策略引擎（後端）
@@ -200,7 +239,7 @@ POST /api/backtest                              # 執行回測
 
 ## 部署規劃
 
-- **現階段：** 本機運行（後端 `uvicorn`，前端 `turbo dev`）
+- **現階段：** 本機運行（後端 `uvicorn`，前端 `pnpm dev`）
 - **未來：** 後端容器化（Docker）部署至 VPS 或 Railway；`apps/web` 部署至 Vercel
 
 ---

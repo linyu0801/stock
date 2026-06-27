@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from db import init_db
 from api.stock import router as stock_router
 from api.watchlist import router as watchlist_router
+from api.backtest import router as backtest_router
 
 app = FastAPI(title="Taiwan Stock API")
 
@@ -19,6 +20,7 @@ def startup():
 
 app.include_router(stock_router)
 app.include_router(watchlist_router)
+app.include_router(backtest_router)
 
 @app.get("/api/health")
 def health():

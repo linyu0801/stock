@@ -16,6 +16,12 @@
 
 ## 技術棧
 
+### Monorepo 管理
+| 項目 | 技術 |
+|------|------|
+| Workspace | pnpm workspaces |
+| 建置編排 | Turborepo |
+
 ### 後端
 | 項目 | 技術 |
 |------|------|
@@ -23,7 +29,7 @@
 | 框架 | FastAPI |
 | 資料擷取 | yfinance |
 | 指標計算 | pandas |
-| 資料儲存 | 本機 JSON / SQLite（自選股清單）|
+| 資料儲存 | SQLite（自選股清單）|
 
 ### 前端
 | 項目 | 技術 |
@@ -33,6 +39,11 @@
 | 樣式 | Tailwind CSS |
 | UI 元件 | shadcn/ui |
 | 圖表 | lightweight-charts（TradingView 開源）|
+
+### 前端架構原則
+- **FSD（Feature-Sliced Design）** — 以功能為單位的分層架構
+- **Clean Architecture** — 依賴方向由外到內（UI → Features → Entities → Shared）
+- **Atomic Design** — `shared/ui` 內的元件依 atoms / molecules / organisms 分層
 
 ---
 
@@ -47,50 +58,92 @@
 
 ---
 
-## 專案結構
+## Monorepo 專案結構
 
 ```
-台股分析平台/
-├── backend/
+/  (repo root)
+├── apps/
+│   └── web/                        # 主 React 應用（Vite + TanStack Router）
+│       └── src/
+│           ├── app/                # [FSD] App 層：Router、Provider、全局設定
+│           ├── pages/              # [FSD] Pages 層：Route-level 頁面元件
+│           │   ├── home/
+│           │   ├── stock/
+│           │   └── backtest/
+│           ├── widgets/            # [FSD] Widgets 層：複合 UI 區塊
+│           │   ├── chart-panel/    # K 線圖 + 指標副圖整合
+│           │   └── watchlist-section/
+│           ├── features/           # [FSD] Features 層：使用者操作場景
+│           │   ├── add-to-watchlist/
+│           │   ├── remove-from-watchlist/
+│           │   ├── fetch-stock-chart/
+│           │   └── run-backtest/
+│           ├── entities/           # [FSD] Entities 層：Domain 型別與 schema
+│           │   ├── stock/          # Stock 型別、selectors
+│           │   ├── watchlist/      # Watchlist 型別
+│           │   └── backtest/       # Backtest 型別、結果 schema
+│           └── shared/             # [FSD] Shared 層：跨層共用
+│               ├── api/            # API client（呼叫 FastAPI）
+│               ├── lib/            # 工具函式
+│               └── ui/             # Atomic Design 元件庫
+│                   ├── atoms/      # Button、Input、Badge、Skeleton
+│                   ├── molecules/  # SearchInput、PriceTag、StatCard
+│                   └── organisms/  # CandlestickChart、WatchlistTable
+│
+├── packages/
+│   ├── api-client/                 # 型別安全的 FastAPI client（fetch + zod schema）
+│   ├── ui/                         # 可重用 shadcn/ui 元件包裝（未來多 app 共用）
+│   └── tsconfig/                   # 共用 TypeScript 設定
+│
+├── backend/                        # Python FastAPI
 │   ├── api/
-│   │   ├── stock.py       # 股票資料、指標端點
-│   │   ├── watchlist.py   # 自選股 CRUD
-│   │   └── backtest.py    # 回測端點
+│   │   ├── stock.py
+│   │   ├── watchlist.py
+│   │   └── backtest.py
 │   ├── services/
-│   │   ├── fetcher.py     # yfinance 資料擷取
-│   │   ├── indicators.py  # 技術指標計算
-│   │   └── backtest.py    # 回測引擎
+│   │   ├── fetcher.py              # yfinance 資料擷取
+│   │   ├── indicators.py           # 技術指標計算
+│   │   └── backtest.py             # 回測引擎
 │   ├── main.py
 │   └── requirements.txt
 │
-└── frontend/
-    ├── src/
-    │   ├── routes/
-    │   │   ├── index.tsx        # 首頁 / 自選股總覽
-    │   │   ├── stock.$id.tsx    # 個股頁面
-    │   │   └── backtest.tsx     # 回測頁面
-    │   ├── components/
-    │   │   ├── CandlestickChart.tsx   # K 線圖（lightweight-charts）
-    │   │   ├── IndicatorPanel.tsx     # 指標疊加（乖離率等）
-    │   │   └── WatchlistCard.tsx      # 自選股卡片
-    │   └── api/
-    │       └── client.ts        # 後端 API 呼叫
-    ├── vite.config.ts
-    └── package.json
+├── turbo.json
+└── pnpm-workspace.yaml
 ```
+
+---
+
+## FSD + Clean Architecture 對應關係
+
+```
+FSD Layer     Clean Arch Layer    說明
+─────────────────────────────────────────────────────
+shared/ui     —                   Atomic Design：atoms / molecules / organisms
+entities      Domain              Stock、Watchlist、Backtest 型別與商業規則
+features      Use Cases           使用者操作（fetch-chart、run-backtest 等）
+widgets       Presentation        組合 features + entities 的 UI 區塊
+pages         Presentation        Route-level 頁面（薄層，組合 widgets）
+app           Infrastructure      Router、全局 Provider
+shared/api    Infrastructure      HTTP client，只知道後端 schema
+```
+
+**依賴規則（Clean Architecture）：**
+- 依賴方向：`pages → widgets → features → entities → shared`
+- 同層之間不可互相 import
+- `packages/api-client` 是唯一知道後端 URL 和 schema 的地方
 
 ---
 
 ## API 端點
 
 ```
-GET  /api/stock/{id}/history?period=3m     # K 線歷史資料（OHLCV）
+GET  /api/stock/{id}/history?period=3m          # K 線歷史資料（OHLCV）
 GET  /api/stock/{id}/indicators?type=bias&n=20  # 技術指標
-GET  /api/stock/{id}/info                  # 基本資訊（股名、現價）
-GET  /api/watchlist                        # 取得自選股清單
-POST /api/watchlist                        # 新增自選股
-DELETE /api/watchlist/{id}                 # 刪除自選股
-POST /api/backtest                         # 執行回測
+GET  /api/stock/{id}/info                       # 基本資訊（股名、現價）
+GET  /api/watchlist                             # 取得自選股清單
+POST /api/watchlist                             # 新增自選股
+DELETE /api/watchlist/{id}                      # 刪除自選股
+POST /api/backtest                              # 執行回測
 ```
 
 ---
@@ -127,25 +180,28 @@ POST /api/backtest                         # 執行回測
 ## 開發階段
 
 ### Phase 1 — 基礎看盤
+- [ ] Monorepo 初始化（pnpm workspaces + Turborepo）
 - [ ] FastAPI 後端起手，接通 yfinance 日線資料
-- [ ] React + Vite + TanStack Router 專案初始化
-- [ ] lightweight-charts K 線圖渲染
-- [ ] 乖離率計算與副圖顯示
+- [ ] `packages/api-client` 建立，定義 zod schema
+- [ ] `apps/web` Vite + TanStack Router + FSD 目錄結構
+- [ ] `shared/ui` atoms 建立（Button、Input、Badge）
+- [ ] K 線圖 organism + 乖離率副圖
 
 ### Phase 2 — 自選股管理
 - [ ] 自選股 CRUD（SQLite 儲存）
-- [ ] 首頁自選股清單
+- [ ] `features/add-to-watchlist`、`features/remove-from-watchlist`
+- [ ] 首頁 `widgets/watchlist-section`
 
 ### Phase 3 — 基礎回測
-- [ ] 乖離率買賣訊號策略引擎
-- [ ] 回測結果圖表與統計
+- [ ] 乖離率買賣訊號策略引擎（後端）
+- [ ] `features/run-backtest` + 回測結果圖表
 
 ---
 
 ## 部署規劃
 
-- **現階段：** 本機運行（後端 `uvicorn`，前端 `vite dev`）
-- **未來：** 後端可容器化（Docker）部署至 VPS 或 Railway；前端部署至 Vercel
+- **現階段：** 本機運行（後端 `uvicorn`，前端 `turbo dev`）
+- **未來：** 後端容器化（Docker）部署至 VPS 或 Railway；`apps/web` 部署至 Vercel
 
 ---
 

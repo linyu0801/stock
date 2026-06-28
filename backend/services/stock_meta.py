@@ -1,4 +1,5 @@
 import urllib.request
+import urllib.error
 import json
 from db import get_conn
 
@@ -7,31 +8,38 @@ TPEx_URL = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes"
 
 def _fetch_json(url: str) -> list:
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=10) as r:
+    with urllib.request.urlopen(req, timeout=15) as r:
         return json.loads(r.read())
 
 def sync_stock_list() -> int:
     rows: list[tuple[str, str]] = []
 
     try:
-        for item in _fetch_json(TWSE_URL):
+        data = _fetch_json(TWSE_URL)
+        for item in data:
             symbol = str(item.get("公司代號", "")).strip()
             name = str(item.get("公司簡稱", "")).strip()
             if symbol and name:
                 rows.append((symbol, name))
-    except Exception:
-        pass
+        print(f"[stock_meta] TWSE: {len(rows)} stocks")
+    except Exception as e:
+        print(f"[stock_meta] TWSE fetch failed: {e}")
 
+    tpex_count = 0
     try:
-        for item in _fetch_json(TPEx_URL):
+        data = _fetch_json(TPEx_URL)
+        for item in data:
             symbol = str(item.get("SecuritiesCompanyCode", "")).strip()
             name = str(item.get("CompanyAbbreviation", "")).strip()
             if symbol and name:
                 rows.append((symbol, name))
-    except Exception:
-        pass
+                tpex_count += 1
+        print(f"[stock_meta] TPEx: {tpex_count} stocks")
+    except Exception as e:
+        print(f"[stock_meta] TPEx fetch failed: {e}")
 
     if not rows:
+        print("[stock_meta] sync failed: no data from either source")
         return 0
 
     with get_conn() as conn:
@@ -39,7 +47,12 @@ def sync_stock_list() -> int:
             "INSERT OR REPLACE INTO stocks_meta (symbol, name) VALUES (?, ?)",
             rows,
         )
+    print(f"[stock_meta] saved {len(rows)} stocks total")
     return len(rows)
+
+def count_stocks() -> int:
+    with get_conn() as conn:
+        return conn.execute("SELECT COUNT(*) FROM stocks_meta").fetchone()[0]
 
 def search_stocks(q: str, limit: int = 10) -> list[dict]:
     q = q.strip()

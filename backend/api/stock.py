@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from services.fetcher import download_history, get_stock_info
 from services.indicators import calc_bias
-from services.stock_meta import search_stocks
+from services.stock_meta import search_stocks, count_stocks, sync_stock_list
 
 router = APIRouter(prefix="/api/stock")
 
@@ -11,6 +11,15 @@ VALID_N = {5, 10, 20, 60}
 @router.get("/search")
 def search(q: str = Query(default="", min_length=1)):
     return search_stocks(q)
+
+@router.get("/meta/count")
+def meta_count():
+    return {"count": count_stocks()}
+
+@router.post("/meta/sync")
+def meta_sync():
+    n = sync_stock_list()
+    return {"synced": n}
 
 @router.get("/{symbol}/history")
 def get_history(symbol: str, period: str = Query(default="3mo")):

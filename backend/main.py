@@ -1,9 +1,11 @@
+import threading
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from db import init_db
 from api.stock import router as stock_router
 from api.watchlist import router as watchlist_router
 from api.backtest import router as backtest_router
+from services.stock_meta import sync_stock_list
 
 app = FastAPI(title="Taiwan Stock API")
 
@@ -17,6 +19,7 @@ app.add_middleware(
 @app.on_event("startup")
 def startup():
     init_db()
+    threading.Thread(target=sync_stock_list, daemon=True).start()
 
 app.include_router(stock_router)
 app.include_router(watchlist_router)

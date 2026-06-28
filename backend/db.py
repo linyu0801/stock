@@ -23,4 +23,8 @@ def init_db() -> None:
                 added_at   TEXT    NOT NULL DEFAULT (datetime('now')),
                 UNIQUE(symbol, group_id)
             );
+            CREATE TABLE IF NOT EXISTS stocks_meta (
+                symbol TEXT PRIMARY KEY,
+                name   TEXT NOT NULL
+            );
         """)

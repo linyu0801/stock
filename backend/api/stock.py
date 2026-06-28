@@ -1,11 +1,16 @@
 from fastapi import APIRouter, HTTPException, Query
 from services.fetcher import download_history, get_stock_info
 from services.indicators import calc_bias
+from services.stock_meta import search_stocks
 
 router = APIRouter(prefix="/api/stock")
 
 VALID_PERIODS = {"1mo", "3mo", "6mo", "1y", "2y", "5y"}
 VALID_N = {5, 10, 20, 60}
+
+@router.get("/search")
+def search(q: str = Query(default="", min_length=1)):
+    return search_stocks(q)
 
 @router.get("/{symbol}/history")
 def get_history(symbol: str, period: str = Query(default="3mo")):

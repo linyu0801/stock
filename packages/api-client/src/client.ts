@@ -15,6 +15,9 @@ async function apiFetch<T>(schema: z.ZodType<T>, url: string, init?: RequestInit
   return schema.parse(await res.json());
 }
 
+export const searchStocks = (q: string): Promise<{ symbol: string; name: string }[]> =>
+  apiFetch(z.array(z.object({ symbol: z.string(), name: z.string() })), `${BASE}/stock/search?q=${encodeURIComponent(q)}`);
+
 export const getStockHistory = (symbol: string, period = "3mo"): Promise<OHLCVBar[]> =>
   apiFetch(z.array(OHLCVBarSchema), `${BASE}/stock/${symbol}/history?period=${period}`);
 

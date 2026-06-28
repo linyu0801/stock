@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CandlestickChart } from "@/shared/ui/organisms/candlestick-chart";
+import { CandlestickChart, BiasChart } from "@/shared/ui/organisms/candlestick-chart";
 import { StatCard } from "@/shared/ui/molecules/stat-card";
 import { Button } from "@/shared/ui/atoms/button";
 import { Skeleton } from "@/shared/ui/atoms/skeleton";
@@ -40,10 +40,12 @@ export function ChartPanel({ symbol }: Props) {
       </div>
 
       {barsLoading ? (
-        <Skeleton className="h-[400px] w-full" />
+        <Skeleton className="h-[480px] w-full" />
       ) : (
-        <CandlestickChart bars={bars} biasPoints={points} biasN={biasN} />
+        <CandlestickChart bars={bars} />
       )}
+
+      <BiasChart biasPoints={points} biasN={biasN} />
 
       <div className="flex items-center gap-2">
         <span className="text-sm text-muted-foreground">乖離率 N =</span>

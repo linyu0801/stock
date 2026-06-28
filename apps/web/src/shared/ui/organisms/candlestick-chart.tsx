@@ -17,13 +17,11 @@ function calcMA(bars: OHLCVBar[], n: number): LineData[] {
   });
 }
 
-interface Props {
+interface CandlestickChartProps {
   bars: OHLCVBar[];
-  biasPoints: IndicatorPoint[];
-  biasN: number;
 }
 
-export function CandlestickChart({ bars, biasPoints, biasN }: Props) {
+export function CandlestickChart({ bars }: CandlestickChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,10 +29,11 @@ export function CandlestickChart({ bars, biasPoints, biasN }: Props) {
 
     const chart = createChart(containerRef.current, {
       autoSize: true,
-      height: 560,
+      height: 480,
       layout: { background: { type: ColorType.Solid, color: "#09090b" }, textColor: "#e4e4e7" },
       grid: { vertLines: { color: "#27272a" }, horzLines: { color: "#27272a" } },
       timeScale: { barSpacing: 8, minBarSpacing: 3 },
+      rightPriceScale: { scaleMargins: { top: 0.08, bottom: 0.08 } },
     });
 
     const candleSeries = chart.addCandlestickSeries({
@@ -60,30 +59,17 @@ export function CandlestickChart({ bars, biasPoints, biasN }: Props) {
       maSeries.setData(maData);
     }
 
-    if (biasPoints.length) {
-      const biasSeries = chart.addLineSeries({
-        color: "#f59e0b",
-        lineWidth: 1,
-        title: `乖離率 ${biasN}日`,
-        pane: 1,
-        priceLineVisible: false,
-        lastValueVisible: false,
-      });
-      biasSeries.setData(biasPoints as LineData[]);
-    }
-
     chart.timeScale().fitContent();
-
     return () => chart.remove();
-  }, [bars, biasPoints, biasN]);
+  }, [bars]);
 
   if (!bars.length) {
-    return <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">載入中…</div>;
+    return <div className="flex h-[480px] items-center justify-center text-sm text-muted-foreground">載入中…</div>;
   }
 
   return (
     <div>
-      <div ref={containerRef} className="w-full" style={{ height: 560 }} />
+      <div ref={containerRef} className="w-full" style={{ height: 480 }} />
       <div className="mt-1 flex gap-3 px-1">
         {MA_CONFIGS.map(({ n, color, label }) => (
           <span key={n} className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -92,6 +78,52 @@ export function CandlestickChart({ bars, biasPoints, biasN }: Props) {
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+interface BiasChartProps {
+  biasPoints: IndicatorPoint[];
+  biasN: number;
+}
+
+export function BiasChart({ biasPoints, biasN }: BiasChartProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current || !biasPoints.length) return;
+
+    const chart = createChart(containerRef.current, {
+      autoSize: true,
+      height: 160,
+      layout: { background: { type: ColorType.Solid, color: "#09090b" }, textColor: "#e4e4e7" },
+      grid: { vertLines: { color: "#27272a" }, horzLines: { color: "#27272a" } },
+      timeScale: { barSpacing: 8, minBarSpacing: 3 },
+      rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.1 } },
+    });
+
+    const series = chart.addLineSeries({
+      color: "#f59e0b",
+      lineWidth: 1,
+      title: `乖離率 ${biasN}日`,
+      priceLineVisible: false,
+      lastValueVisible: true,
+    });
+    series.setData(biasPoints as LineData[]);
+
+    // zero line
+    series.createPriceLine({ price: 0, color: "#52525b", lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: "" });
+
+    chart.timeScale().fitContent();
+    return () => chart.remove();
+  }, [biasPoints, biasN]);
+
+  if (!biasPoints.length) return null;
+
+  return (
+    <div>
+      <div className="px-1 py-1 text-xs text-muted-foreground">乖離率 {biasN} 日</div>
+      <div ref={containerRef} className="w-full" style={{ height: 160 }} />
     </div>
   );
 }

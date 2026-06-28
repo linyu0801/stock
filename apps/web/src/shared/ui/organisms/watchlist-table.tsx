@@ -14,6 +14,12 @@ interface Props {
   onRenameGroup: (groupId: number, name: string) => void;
 }
 
+function ChangeLabel({ value }: { value: number }) {
+  const color = value >= 0 ? "#ef4444" : "#22c55e";
+  const sign = value >= 0 ? "+" : "";
+  return <span style={{ color, fontWeight: 500, fontSize: 13 }}>{sign}{value.toFixed(2)}%</span>;
+}
+
 export function WatchlistTable({
   groups, prices, onStockClick, onRemoveStock, onRemoveGroup, onAddStock, onRenameGroup,
 }: Props) {
@@ -35,7 +41,9 @@ export function WatchlistTable({
     <div className="space-y-2">
       {groups.map((group) => (
         <div key={group.id} className="rounded-lg border">
-          <div className="flex w-full items-center justify-between px-4 py-3">
+
+          {/* Group header */}
+          <div className="flex items-center gap-2 px-4 py-3">
             {renaming[group.id] !== undefined ? (
               <input
                 className="flex-1 bg-transparent text-sm font-medium outline-none"
@@ -53,47 +61,49 @@ export function WatchlistTable({
                 {group.name}
               </button>
             )}
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">{group.stocks.length}</Badge>
-              <Button variant="ghost" size="sm" onClick={() => startRename(group)}>改名</Button>
-              <Button variant="ghost" size="sm" onClick={() => onRemoveGroup(group.id)}>刪除</Button>
-            </div>
+            <Badge variant="secondary">{group.stocks.length}</Badge>
+            <Button variant="ghost" size="sm" onClick={() => startRename(group)}>改名</Button>
+            <Button variant="ghost" size="sm" onClick={() => onRemoveGroup(group.id)}>刪除</Button>
           </div>
 
+          {/* Expanded stock list */}
           {expanded[group.id] && (
             <div className="border-t">
-              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-4 py-1 text-xs text-muted-foreground">
+              {/* Column header */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 72px 84px 56px", gap: "0 8px" }}
+                className="px-4 py-1 text-xs text-muted-foreground">
                 <span>股票</span>
-                <span className="text-right">現價</span>
-                <span className="text-right">漲跌幅</span>
+                <span style={{ textAlign: "right" }}>現價</span>
+                <span style={{ textAlign: "right" }}>漲跌幅</span>
                 <span />
               </div>
+
               {group.stocks.map((s) => {
                 const p = prices[s.symbol];
                 return (
                   <div
                     key={s.id}
-                    className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-4 px-4 py-2 hover:bg-muted/30"
+                    style={{ display: "grid", gridTemplateColumns: "1fr 72px 84px 56px", gap: "0 8px", alignItems: "center" }}
+                    className="px-4 py-2 hover:bg-muted/30"
                   >
                     <button className="text-left" onClick={() => onStockClick(s.symbol)}>
-                      <span className="font-mono text-sm font-medium">{s.symbol}</span>
+                      <span className="font-mono text-sm font-semibold">{s.symbol}</span>
                       {p && <span className="ml-2 text-xs text-muted-foreground">{p.name}</span>}
                     </button>
-                    <span className="font-mono text-sm">
+                    <span style={{ textAlign: "right", fontFamily: "monospace", fontSize: 13 }}>
                       {p ? p.close.toFixed(2) : "—"}
                     </span>
-                    <span
-                      className="text-sm font-medium"
-                      style={{ color: !p ? undefined : p.change_pct >= 0 ? "#ef4444" : "#22c55e" }}
-                    >
-                      {p ? `${p.change_pct >= 0 ? "+" : ""}${p.change_pct.toFixed(2)}%` : "—"}
+                    <span style={{ textAlign: "right" }}>
+                      {p ? <ChangeLabel value={p.change_pct} /> : <span className="text-muted-foreground">—</span>}
                     </span>
-                    <Button variant="ghost" size="sm" onClick={() => onRemoveStock(s.id)}>
-                      移除
-                    </Button>
+                    <span style={{ textAlign: "right" }}>
+                      <Button variant="ghost" size="sm" onClick={() => onRemoveStock(s.id)}>移除</Button>
+                    </span>
                   </div>
                 );
               })}
+
+              {/* Add stock */}
               <div className="px-3 py-2">
                 <StockSearchCombobox
                   placeholder="搜尋股票加入…"

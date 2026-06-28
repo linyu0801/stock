@@ -1,14 +1,21 @@
 import time
+import requests
+import urllib3
 import yfinance as yf
-import pandas as pd
 from typing import Any
 from db import get_conn
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+_session = requests.Session()
+_session.verify = False
+_session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
 
 _price_cache: dict[str, tuple[float, dict]] = {}
 _PRICE_TTL = 300  # 5 minutes
 
 def download_history(symbol: str, period: str) -> list[dict[str, Any]]:
-    df = yf.download(f"{symbol}.TW", period=period, auto_adjust=True, progress=False)
+    df = yf.download(f"{symbol}.TW", period=period, auto_adjust=True, progress=False, session=_session)
     if df.empty:
         return []
     df = df.reset_index()
@@ -31,7 +38,7 @@ def get_stock_info(symbol: str) -> dict[str, Any] | None:
     latest = bars[-1]
     prev_close = bars[-2]["close"]
     change_pct = (latest["close"] - prev_close) / prev_close * 100
-    ticker = yf.Ticker(f"{symbol}.TW")
+    ticker = yf.Ticker(f"{symbol}.TW", session=_session)
     name = ticker.info.get("longName") or ticker.info.get("shortName") or symbol
     return {
         "symbol": symbol,
@@ -50,7 +57,7 @@ def _fetch_prices_from_yfinance(symbols: list[str]) -> list[dict[str, Any]]:
 
     tw_syms = [f"{s}.TW" for s in symbols]
     try:
-        df = yf.download(tw_syms, period="5d", auto_adjust=True, progress=False)
+        df = yf.download(tw_syms, period="5d", auto_adjust=True, progress=False, session=_session)
     except Exception:
         return []
 

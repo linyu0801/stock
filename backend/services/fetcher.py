@@ -1,6 +1,7 @@
 import yfinance as yf
 import pandas as pd
 from typing import Any
+from db import get_conn
 
 def download_history(symbol: str, period: str) -> list[dict[str, Any]]:
     df = yf.download(f"{symbol}.TW", period=period, auto_adjust=True, progress=False)
@@ -34,3 +35,48 @@ def get_stock_info(symbol: str) -> dict[str, Any] | None:
         "close": latest["close"],
         "change_pct": round(change_pct, 2),
     }
+
+def get_batch_prices(symbols: list[str]) -> list[dict[str, Any]]:
+    if not symbols:
+        return []
+
+    # fetch names from local DB
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT symbol, name FROM stocks_meta WHERE symbol IN ({','.join('?' * len(symbols))})",
+            symbols,
+        ).fetchall()
+    name_map = {r["symbol"]: r["name"] for r in rows}
+
+    tw_syms = [f"{s}.TW" for s in symbols]
+    try:
+        df = yf.download(tw_syms, period="5d", auto_adjust=True, progress=False)
+    except Exception:
+        return []
+
+    if df.empty:
+        return []
+
+    results: list[dict[str, Any]] = []
+
+    if len(symbols) == 1:
+        closes = df["Close"].dropna()
+        if closes.empty:
+            return []
+        close = round(float(closes.iloc[-1]), 2)
+        change_pct = round((float(closes.iloc[-1]) - float(closes.iloc[-2])) / float(closes.iloc[-2]) * 100, 2) if len(closes) >= 2 else 0.0
+        results.append({"symbol": symbols[0], "name": name_map.get(symbols[0], symbols[0]), "close": close, "change_pct": change_pct})
+    else:
+        close_df = df["Close"]
+        for sym, tw_sym in zip(symbols, tw_syms):
+            try:
+                closes = close_df[tw_sym].dropna()
+                if closes.empty:
+                    continue
+                close = round(float(closes.iloc[-1]), 2)
+                change_pct = round((float(closes.iloc[-1]) - float(closes.iloc[-2])) / float(closes.iloc[-2]) * 100, 2) if len(closes) >= 2 else 0.0
+                results.append({"symbol": sym, "name": name_map.get(sym, sym), "close": close, "change_pct": change_pct})
+            except Exception:
+                continue
+
+    return results

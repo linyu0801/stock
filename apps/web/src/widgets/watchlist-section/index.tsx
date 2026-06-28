@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useGroups } from "@/features/manage-groups/use-groups";
+import { getStockPrices, type StockPrice } from "@taiwan-stock/api-client";
 import { WatchlistTable } from "@/shared/ui/organisms/watchlist-table";
 import { Input } from "@/shared/ui/atoms/input";
 import { Button } from "@/shared/ui/atoms/button";
@@ -9,6 +10,19 @@ export function WatchlistSection() {
   const { groups, createGroup, renameGroup, deleteGroup, addStock, removeStock } = useGroups();
   const navigate = useNavigate();
   const [newGroupName, setNewGroupName] = useState("");
+  const [prices, setPrices] = useState<Record<string, StockPrice>>({});
+
+  useEffect(() => {
+    const allSymbols = [...new Set(groups.flatMap((g) => g.stocks.map((s) => s.symbol)))];
+    if (!allSymbols.length) return;
+    getStockPrices(allSymbols)
+      .then((data) => {
+        const map: Record<string, StockPrice> = {};
+        data.forEach((p) => { map[p.symbol] = p; });
+        setPrices(map);
+      })
+      .catch(() => {});
+  }, [groups]);
 
   return (
     <div className="space-y-4">
@@ -38,6 +52,7 @@ export function WatchlistSection() {
 
       <WatchlistTable
         groups={groups}
+        prices={prices}
         onStockClick={(symbol) => navigate({ to: "/stock/$id", params: { id: symbol } })}
         onRemoveStock={removeStock}
         onRemoveGroup={deleteGroup}

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
-from services.fetcher import download_history, get_stock_info
+from services.fetcher import download_history, get_stock_info, get_batch_prices
 from services.indicators import calc_bias
 from services.stock_meta import search_stocks, count_stocks, sync_stock_list
 
@@ -11,6 +11,11 @@ VALID_N = {5, 10, 20, 60}
 @router.get("/search")
 def search(q: str = Query(default="", min_length=1)):
     return search_stocks(q)
+
+@router.get("/prices")
+def prices(symbols: str = Query(...)):
+    symbol_list = [s.strip() for s in symbols.split(",") if s.strip()]
+    return get_batch_prices(symbol_list)
 
 @router.get("/meta/count")
 def meta_count():

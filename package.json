@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"cd backend && uvicorn main:app --reload\" \"pnpm --filter @taiwan-stock/web dev\" --names \"api,web\" --prefix-colors \"cyan,magenta\""
+    "dev": "concurrently \"cd backend && python -m uvicorn main:app --reload\" \"pnpm --filter @taiwan-stock/web dev\" --names \"api,web\" --prefix-colors \"cyan,magenta\""
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

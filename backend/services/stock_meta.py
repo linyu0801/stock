@@ -32,15 +32,9 @@ def sync_stock_list() -> int:
     tpex_before = len(rows)
     try:
         data = _fetch_json(TPEx_URL)
-        if data:
-            print(f"[stock_meta] TPEx sample keys: {list(data[0].keys())[:6]}")
         for item in data:
-            symbol = (
-                str(item.get("SecuritiesCompanyCode", "") or item.get("股票代號", "")).strip()
-            )
-            name = (
-                str(item.get("CompanyAbbreviation", "") or item.get("CompanyName", "") or item.get("公司簡稱", "")).strip()
-            )
+            symbol = str(item.get("SecuritiesCompanyCode", "")).strip()
+            name = str(item.get("CompanyName", "")).strip()
             if symbol and name:
                 rows.append((symbol, name))
         print(f"[stock_meta] TPEx: {len(rows) - tpex_before} stocks")

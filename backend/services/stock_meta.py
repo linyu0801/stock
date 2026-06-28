@@ -1,14 +1,18 @@
 import urllib.request
-import urllib.error
 import json
+import ssl
 from db import get_conn
 
 TWSE_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap03_L"
 TPEx_URL = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes"
 
+_SSL_CTX = ssl.create_default_context()
+_SSL_CTX.check_hostname = False
+_SSL_CTX.verify_mode = ssl.CERT_NONE
+
 def _fetch_json(url: str) -> list:
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=15) as r:
+    with urllib.request.urlopen(req, timeout=15, context=_SSL_CTX) as r:
         return json.loads(r.read())
 
 def sync_stock_list() -> int:
@@ -25,16 +29,21 @@ def sync_stock_list() -> int:
     except Exception as e:
         print(f"[stock_meta] TWSE fetch failed: {e}")
 
-    tpex_count = 0
+    tpex_before = len(rows)
     try:
         data = _fetch_json(TPEx_URL)
+        if data:
+            print(f"[stock_meta] TPEx sample keys: {list(data[0].keys())[:6]}")
         for item in data:
-            symbol = str(item.get("SecuritiesCompanyCode", "")).strip()
-            name = str(item.get("CompanyAbbreviation", "")).strip()
+            symbol = (
+                str(item.get("SecuritiesCompanyCode", "") or item.get("股票代號", "")).strip()
+            )
+            name = (
+                str(item.get("CompanyAbbreviation", "") or item.get("CompanyName", "") or item.get("公司簡稱", "")).strip()
+            )
             if symbol and name:
                 rows.append((symbol, name))
-                tpex_count += 1
-        print(f"[stock_meta] TPEx: {tpex_count} stocks")
+        print(f"[stock_meta] TPEx: {len(rows) - tpex_before} stocks")
     except Exception as e:
         print(f"[stock_meta] TPEx fetch failed: {e}")
 

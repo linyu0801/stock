@@ -1,7 +1,11 @@
+import time
 import yfinance as yf
 import pandas as pd
 from typing import Any
 from db import get_conn
+
+_price_cache: dict[str, tuple[float, dict]] = {}
+_PRICE_TTL = 300  # 5 minutes
 
 def download_history(symbol: str, period: str) -> list[dict[str, Any]]:
     df = yf.download(f"{symbol}.TW", period=period, auto_adjust=True, progress=False)
@@ -36,11 +40,7 @@ def get_stock_info(symbol: str) -> dict[str, Any] | None:
         "change_pct": round(change_pct, 2),
     }
 
-def get_batch_prices(symbols: list[str]) -> list[dict[str, Any]]:
-    if not symbols:
-        return []
-
-    # fetch names from local DB
+def _fetch_prices_from_yfinance(symbols: list[str]) -> list[dict[str, Any]]:
     with get_conn() as conn:
         rows = conn.execute(
             f"SELECT symbol, name FROM stocks_meta WHERE symbol IN ({','.join('?' * len(symbols))})",
@@ -80,3 +80,16 @@ def get_batch_prices(symbols: list[str]) -> list[dict[str, Any]]:
                 continue
 
     return results
+
+def get_batch_prices(symbols: list[str]) -> list[dict[str, Any]]:
+    if not symbols:
+        return []
+    now = time.time()
+    stale = [s for s in symbols if s not in _price_cache or now - _price_cache[s][0] >= _PRICE_TTL]
+
+    if stale:
+        fresh = _fetch_prices_from_yfinance(stale)
+        for p in fresh:
+            _price_cache[p["symbol"]] = (now, p)
+
+    return [_price_cache[s][1] for s in symbols if s in _price_cache]

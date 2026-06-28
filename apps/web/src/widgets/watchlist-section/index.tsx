@@ -12,17 +12,19 @@ export function WatchlistSection() {
   const [newGroupName, setNewGroupName] = useState("");
   const [prices, setPrices] = useState<Record<string, StockPrice>>({});
 
+  const symbolsKey = [...new Set(groups.flatMap((g) => g.stocks.map((s) => s.symbol)))].sort().join(",");
+
   useEffect(() => {
-    const allSymbols = [...new Set(groups.flatMap((g) => g.stocks.map((s) => s.symbol)))];
-    if (!allSymbols.length) return;
-    getStockPrices(allSymbols)
+    if (!symbolsKey) return;
+    const symbols = symbolsKey.split(",");
+    getStockPrices(symbols)
       .then((data) => {
         const map: Record<string, StockPrice> = {};
         data.forEach((p) => { map[p.symbol] = p; });
         setPrices(map);
       })
       .catch(() => {});
-  }, [groups]);
+  }, [symbolsKey]);
 
   return (
     <div className="space-y-4">

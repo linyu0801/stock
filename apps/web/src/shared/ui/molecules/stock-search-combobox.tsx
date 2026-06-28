@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { searchStocks } from "@taiwan-stock/api-client";
-import { Input } from "../atoms/input";
 
 interface Props {
   onSelect: (symbol: string) => void;
@@ -11,23 +10,31 @@ export function StockSearchCombobox({ onSelect, placeholder = "輸入股票代�
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ symbol: string; name: string }[]>([]);
   const [open, setOpen] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
-    if (!query.trim()) { setResults([]); setOpen(false); return; }
+    if (!query.trim()) {
+      setResults([]);
+      setOpen(false);
+      return;
+    }
     timer.current = setTimeout(async () => {
       try {
         const data = await searchStocks(query);
+        console.log("[search]", query, data);
         setResults(data);
         setOpen(data.length > 0);
-      } catch {
+      } catch (err) {
+        console.error("[search] error:", err);
         setResults([]);
         setOpen(false);
       }
     }, 200);
-    return () => { if (timer.current) clearTimeout(timer.current); };
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
   }, [query]);
 
   useEffect(() => {
@@ -48,26 +55,62 @@ export function StockSearchCombobox({ onSelect, placeholder = "輸入股票代�
   };
 
   return (
-    <div ref={containerRef} className="relative w-full">
-      <Input
+    <div ref={containerRef} style={{ position: "relative", width: "100%" }}>
+      <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={placeholder}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && results.length > 0) select(results[0].symbol);
-          if (e.key === "Escape") setOpen(false);
+        onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
+        style={{
+          width: "100%",
+          padding: "6px 10px",
+          border: "1px solid #e4e4e7",
+          borderRadius: "6px",
+          fontSize: "14px",
+          outline: "none",
+          background: "transparent",
         }}
       />
       {open && (
-        <ul className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md">
+        <ul
+          style={{
+            position: "absolute",
+            top: "100%",
+            left: 0,
+            right: 0,
+            zIndex: 9999,
+            marginTop: "4px",
+            background: "white",
+            border: "1px solid #e4e4e7",
+            borderRadius: "6px",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+            listStyle: "none",
+            padding: 0,
+            margin: 0,
+          }}
+        >
           {results.map((r) => (
             <li key={r.symbol}>
               <button
-                className="flex w-full items-center gap-3 px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                type="button"
                 onMouseDown={(e) => { e.preventDefault(); select(r.symbol); }}
+                style={{
+                  display: "flex",
+                  width: "100%",
+                  alignItems: "center",
+                  gap: "12px",
+                  padding: "8px 12px",
+                  fontSize: "14px",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#f4f4f5")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
               >
-                <span className="font-mono font-medium">{r.symbol}</span>
-                <span className="text-muted-foreground">{r.name}</span>
+                <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{r.symbol}</span>
+                <span style={{ color: "#71717a" }}>{r.name}</span>
               </button>
             </li>
           ))}

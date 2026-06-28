@@ -3,10 +3,10 @@ import { createChart, CandlestickData, LineData, ColorType } from "lightweight-c
 import type { OHLCVBar, IndicatorPoint } from "@taiwan-stock/api-client";
 
 const MA_CONFIGS = [
-  { n: 5,  color: "#3b82f6" },
-  { n: 10, color: "#f59e0b" },
-  { n: 20, color: "#a855f7" },
-  { n: 60, color: "#ec4899" },
+  { n: 5,  color: "#3b82f6", label: "MA5 週線"  },
+  { n: 10, color: "#f59e0b", label: "MA10"       },
+  { n: 20, color: "#a855f7", label: "MA20 月線"  },
+  { n: 60, color: "#ec4899", label: "MA60 季線"  },
 ] as const;
 
 function calcMA(bars: OHLCVBar[], n: number): LineData[] {
@@ -84,10 +84,10 @@ export function CandlestickChart({ bars, biasPoints, biasN }: Props) {
     <div>
       <div ref={containerRef} className="w-full" style={{ height: 420 }} />
       <div className="mt-1 flex gap-3 px-1">
-        {MA_CONFIGS.map(({ n, color }) => (
-          <span key={n} className="flex items-center gap-1 text-xs">
+        {MA_CONFIGS.map(({ n, color, label }) => (
+          <span key={n} className="flex items-center gap-1 text-xs text-muted-foreground">
             <span style={{ display: "inline-block", width: 16, height: 2, background: color, borderRadius: 1 }} />
-            MA{n}
+            {label}
           </span>
         ))}
       </div>

@@ -1,95 +1,104 @@
 import time
-import urllib3
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
-
-# Disable SSL verification globally for all requests (yfinance uses requests internally)
-urllib3.disable_warnings(InsecureRequestWarning)
-_orig_send = HTTPAdapter.send
-def _no_ssl_send(self, request, **kwargs):
-    kwargs["verify"] = False
-    return _orig_send(self, request, **kwargs)
-HTTPAdapter.send = _no_ssl_send
-
-import yfinance as yf
+import json
+import ssl
+import urllib.request
+from datetime import datetime
 from typing import Any
 from db import get_conn
 
+_SSL_CTX = ssl.create_default_context()
+_SSL_CTX.check_hostname = False
+_SSL_CTX.verify_mode = ssl.CERT_NONE
+
+_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "application/json",
+}
+
 _price_cache: dict[str, tuple[float, dict]] = {}
-_PRICE_TTL = 300  # 5 minutes
+_PRICE_TTL = 300
+
+def _yahoo_get(symbol_tw: str, params: str) -> dict:
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol_tw}?{params}"
+    req = urllib.request.Request(url, headers=_HEADERS)
+    with urllib.request.urlopen(req, timeout=15, context=_SSL_CTX) as r:
+        return json.loads(r.read())
 
 def download_history(symbol: str, period: str) -> list[dict[str, Any]]:
-    df = yf.download(f"{symbol}.TW", period=period, auto_adjust=True, progress=False)
-    if df.empty:
+    try:
+        data = _yahoo_get(f"{symbol}.TW", f"range={period}&interval=1d")
+    except Exception as e:
+        print(f"[fetcher] {symbol} history failed: {e}")
         return []
-    df = df.reset_index()
-    return [
-        {
-            "time": row["Date"].strftime("%Y-%m-%d"),
-            "open": float(row["Open"]),
-            "high": float(row["High"]),
-            "low": float(row["Low"]),
-            "close": float(row["Close"]),
-            "volume": int(row["Volume"]),
-        }
-        for _, row in df.iterrows()
-    ]
+
+    result = data.get("chart", {}).get("result") or []
+    if not result:
+        return []
+
+    r = result[0]
+    timestamps = r.get("timestamp", [])
+    quote = (r.get("indicators", {}).get("quote") or [{}])[0]
+    opens   = quote.get("open",   [])
+    highs   = quote.get("high",   [])
+    lows    = quote.get("low",    [])
+    closes  = quote.get("close",  [])
+    volumes = quote.get("volume", [])
+
+    bars = []
+    for i, ts in enumerate(timestamps):
+        try:
+            if closes[i] is None:
+                continue
+            bars.append({
+                "time":   datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d"),
+                "open":   round(float(opens[i]),  2),
+                "high":   round(float(highs[i]),  2),
+                "low":    round(float(lows[i]),   2),
+                "close":  round(float(closes[i]), 2),
+                "volume": int(volumes[i]) if volumes[i] else 0,
+            })
+        except (TypeError, IndexError, ValueError):
+            continue
+
+    return bars
 
 def get_stock_info(symbol: str) -> dict[str, Any] | None:
     bars = download_history(symbol, "5d")
     if len(bars) < 2:
         return None
-    latest = bars[-1]
-    prev_close = bars[-2]["close"]
-    change_pct = (latest["close"] - prev_close) / prev_close * 100
-    ticker = yf.Ticker(f"{symbol}.TW")
-    name = ticker.info.get("longName") or ticker.info.get("shortName") or symbol
+    latest, prev = bars[-1], bars[-2]
+    change_pct = (latest["close"] - prev["close"]) / prev["close"] * 100
+    with get_conn() as conn:
+        row = conn.execute("SELECT name FROM stocks_meta WHERE symbol = ?", (symbol,)).fetchone()
+    name = row["name"] if row else symbol
     return {
-        "symbol": symbol,
-        "name": name,
-        "close": latest["close"],
+        "symbol":     symbol,
+        "name":       name,
+        "close":      latest["close"],
         "change_pct": round(change_pct, 2),
     }
 
-def _fetch_prices_from_yfinance(symbols: list[str]) -> list[dict[str, Any]]:
+def _fetch_prices_from_yahoo(symbols: list[str]) -> list[dict[str, Any]]:
     with get_conn() as conn:
         rows = conn.execute(
-            f"SELECT symbol, name FROM stocks_meta WHERE symbol IN ({','.join('?' * len(symbols))})",
+            f"SELECT symbol, name FROM stocks_meta WHERE symbol IN ({','.join('?'*len(symbols))})",
             symbols,
         ).fetchall()
     name_map = {r["symbol"]: r["name"] for r in rows}
 
-    tw_syms = [f"{s}.TW" for s in symbols]
-    try:
-        df = yf.download(tw_syms, period="5d", auto_adjust=True, progress=False)
-    except Exception:
-        return []
-
-    if df.empty:
-        return []
-
-    results: list[dict[str, Any]] = []
-
-    if len(symbols) == 1:
-        closes = df["Close"].dropna()
-        if closes.empty:
-            return []
-        close = round(float(closes.iloc[-1]), 2)
-        change_pct = round((float(closes.iloc[-1]) - float(closes.iloc[-2])) / float(closes.iloc[-2]) * 100, 2) if len(closes) >= 2 else 0.0
-        results.append({"symbol": symbols[0], "name": name_map.get(symbols[0], symbols[0]), "close": close, "change_pct": change_pct})
-    else:
-        close_df = df["Close"]
-        for sym, tw_sym in zip(symbols, tw_syms):
-            try:
-                closes = close_df[tw_sym].dropna()
-                if closes.empty:
-                    continue
-                close = round(float(closes.iloc[-1]), 2)
-                change_pct = round((float(closes.iloc[-1]) - float(closes.iloc[-2])) / float(closes.iloc[-2]) * 100, 2) if len(closes) >= 2 else 0.0
-                results.append({"symbol": sym, "name": name_map.get(sym, sym), "close": close, "change_pct": change_pct})
-            except Exception:
-                continue
-
+    results = []
+    for sym in symbols:
+        bars = download_history(sym, "5d")
+        if len(bars) < 1:
+            continue
+        latest = bars[-1]
+        change_pct = round((latest["close"] - bars[-2]["close"]) / bars[-2]["close"] * 100, 2) if len(bars) >= 2 else 0.0
+        results.append({
+            "symbol":     sym,
+            "name":       name_map.get(sym, sym),
+            "close":      latest["close"],
+            "change_pct": change_pct,
+        })
     return results
 
 def get_batch_prices(symbols: list[str]) -> list[dict[str, Any]]:
@@ -99,8 +108,7 @@ def get_batch_prices(symbols: list[str]) -> list[dict[str, Any]]:
     stale = [s for s in symbols if s not in _price_cache or now - _price_cache[s][0] >= _PRICE_TTL]
 
     if stale:
-        fresh = _fetch_prices_from_yfinance(stale)
-        for p in fresh:
+        for p in _fetch_prices_from_yahoo(stale):
             _price_cache[p["symbol"]] = (now, p)
 
     return [_price_cache[s][1] for s in symbols if s in _price_cache]

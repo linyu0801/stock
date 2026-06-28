@@ -1,21 +1,25 @@
 import time
-import requests
 import urllib3
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
+
+# Disable SSL verification globally for all requests (yfinance uses requests internally)
+urllib3.disable_warnings(InsecureRequestWarning)
+_orig_send = HTTPAdapter.send
+def _no_ssl_send(self, request, **kwargs):
+    kwargs["verify"] = False
+    return _orig_send(self, request, **kwargs)
+HTTPAdapter.send = _no_ssl_send
+
 import yfinance as yf
 from typing import Any
 from db import get_conn
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-_session = requests.Session()
-_session.verify = False
-_session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
 
 _price_cache: dict[str, tuple[float, dict]] = {}
 _PRICE_TTL = 300  # 5 minutes
 
 def download_history(symbol: str, period: str) -> list[dict[str, Any]]:
-    df = yf.download(f"{symbol}.TW", period=period, auto_adjust=True, progress=False, session=_session)
+    df = yf.download(f"{symbol}.TW", period=period, auto_adjust=True, progress=False)
     if df.empty:
         return []
     df = df.reset_index()
@@ -38,7 +42,7 @@ def get_stock_info(symbol: str) -> dict[str, Any] | None:
     latest = bars[-1]
     prev_close = bars[-2]["close"]
     change_pct = (latest["close"] - prev_close) / prev_close * 100
-    ticker = yf.Ticker(f"{symbol}.TW", session=_session)
+    ticker = yf.Ticker(f"{symbol}.TW")
     name = ticker.info.get("longName") or ticker.info.get("shortName") or symbol
     return {
         "symbol": symbol,
@@ -57,7 +61,7 @@ def _fetch_prices_from_yfinance(symbols: list[str]) -> list[dict[str, Any]]:
 
     tw_syms = [f"{s}.TW" for s in symbols]
     try:
-        df = yf.download(tw_syms, period="5d", auto_adjust=True, progress=False, session=_session)
+        df = yf.download(tw_syms, period="5d", auto_adjust=True, progress=False)
     except Exception:
         return []
 

@@ -31,9 +31,10 @@ export function CandlestickChart({ bars, biasPoints, biasN }: Props) {
 
     const chart = createChart(containerRef.current, {
       autoSize: true,
-      height: 420,
+      height: 560,
       layout: { background: { type: ColorType.Solid, color: "#09090b" }, textColor: "#e4e4e7" },
       grid: { vertLines: { color: "#27272a" }, horzLines: { color: "#27272a" } },
+      timeScale: { barSpacing: 8, minBarSpacing: 3 },
     });
 
     const candleSeries = chart.addCandlestickSeries({
@@ -82,7 +83,7 @@ export function CandlestickChart({ bars, biasPoints, biasN }: Props) {
 
   return (
     <div>
-      <div ref={containerRef} className="w-full" style={{ height: 420 }} />
+      <div ref={containerRef} className="w-full" style={{ height: 560 }} />
       <div className="mt-1 flex gap-3 px-1">
         {MA_CONFIGS.map(({ n, color, label }) => (
           <span key={n} className="flex items-center gap-1 text-xs text-muted-foreground">

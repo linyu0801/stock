@@ -12,6 +12,7 @@
     "@base-ui/react": "^1.6.0",
     "@fontsource-variable/geist": "^5.2.9",
     "@taiwan-stock/api-client": "workspace:*",
+    "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-router": "^1.43.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.1",
     "@taiwan-stock/tsconfig": "workspace:*",
+    "@types/node": "^26.0.1",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",

@@ -2,6 +2,7 @@ import time
 import json
 import ssl
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
 from db import get_conn
@@ -17,16 +18,36 @@ _HEADERS = {
 
 _price_cache: dict[str, tuple[float, dict]] = {}
 _PRICE_TTL = 300
+_suffix_cache: dict[str, str] = {}
 
-def _yahoo_get(symbol_tw: str, params: str) -> dict:
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol_tw}?{params}"
+def _yahoo_get(yahoo_sym: str, params: str) -> dict:
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_sym}?{params}"
     req = urllib.request.Request(url, headers=_HEADERS)
     with urllib.request.urlopen(req, timeout=15, context=_SSL_CTX) as r:
         return json.loads(r.read())
 
+def _resolve_yahoo_symbol(symbol: str) -> str | None:
+    """Return cached suffix, or probe .TW then .TWO, cache winner."""
+    if symbol.startswith("^"):
+        return symbol
+    if symbol in _suffix_cache:
+        return f"{symbol}{_suffix_cache[symbol]}"
+    for suffix in (".TW", ".TWO"):
+        try:
+            _yahoo_get(f"{symbol}{suffix}", "range=1d&interval=1d")
+            _suffix_cache[symbol] = suffix
+            return f"{symbol}{suffix}"
+        except Exception:
+            continue
+    return None
+
 def download_history(symbol: str, period: str) -> list[dict[str, Any]]:
+    yahoo_sym = _resolve_yahoo_symbol(symbol)
+    if not yahoo_sym:
+        print(f"[fetcher] {symbol} not found on Yahoo (.TW / .TWO both failed)")
+        return []
     try:
-        data = _yahoo_get(f"{symbol}.TW", f"range={period}&interval=1d")
+        data = _yahoo_get(yahoo_sym, f"range={period}&interval=1d")
     except Exception as e:
         print(f"[fetcher] {symbol} history failed: {e}")
         return []
@@ -86,19 +107,30 @@ def _fetch_prices_from_yahoo(symbols: list[str]) -> list[dict[str, Any]]:
         ).fetchall()
     name_map = {r["symbol"]: r["name"] for r in rows}
 
-    results = []
-    for sym in symbols:
+    def _fetch_one(sym: str) -> dict[str, Any] | None:
         bars = download_history(sym, "5d")
-        if len(bars) < 1:
-            continue
+        if not bars:
+            return None
         latest = bars[-1]
-        change_pct = round((latest["close"] - bars[-2]["close"]) / bars[-2]["close"] * 100, 2) if len(bars) >= 2 else 0.0
-        results.append({
+        prev_close = bars[-2]["close"] if len(bars) >= 2 else latest["close"]
+        change_abs = round(latest["close"] - prev_close, 2)
+        change_pct = round(change_abs / prev_close * 100, 2) if prev_close != 0 else 0.0
+        return {
             "symbol":     sym,
             "name":       name_map.get(sym, sym),
             "close":      latest["close"],
+            "change":     change_abs,
             "change_pct": change_pct,
-        })
+            "volume":     latest["volume"],
+        }
+
+    results = []
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(_fetch_one, sym): sym for sym in symbols}
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                results.append(result)
     return results
 
 def get_batch_prices(symbols: list[str]) -> list[dict[str, Any]]:

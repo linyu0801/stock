@@ -18,7 +18,7 @@ async function apiFetch<T>(schema: z.ZodType<T>, url: string, init?: RequestInit
 export const searchStocks = (q: string): Promise<{ symbol: string; name: string }[]> =>
   apiFetch(z.array(z.object({ symbol: z.string(), name: z.string() })), `${BASE}/stock/search?q=${encodeURIComponent(q)}`);
 
-const StockPriceSchema = z.object({ symbol: z.string(), name: z.string(), close: z.number(), change_pct: z.number() });
+const StockPriceSchema = z.object({ symbol: z.string(), name: z.string(), close: z.number(), change: z.number(), change_pct: z.number(), volume: z.number() });
 export type StockPrice = z.infer<typeof StockPriceSchema>;
 export const getStockPrices = (symbols: string[]): Promise<StockPrice[]> =>
   apiFetch(z.array(StockPriceSchema), `${BASE}/stock/prices?symbols=${symbols.join(",")}`);

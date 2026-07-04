@@ -120,6 +120,15 @@ export const reorderGroupItems = (groupId: number, items: ReorderItem[]): Promis
     body: JSON.stringify({ group_id: groupId, items }),
   });
 
+const MoverSchema = z.object({ symbol: z.string(), name: z.string(), close: z.number(), change_pct: z.number() });
+export type Mover = z.infer<typeof MoverSchema>;
+export type MoversResponse = { gainers: Mover[]; losers: Mover[]; date: string | null };
+export const getMarketMovers = (): Promise<MoversResponse> =>
+  apiFetch(
+    z.object({ gainers: z.array(MoverSchema), losers: z.array(MoverSchema), date: z.string().nullable() }),
+    `${BASE}/market/movers`,
+  );
+
 export const runBacktest = (req: BacktestRequest): Promise<BacktestResult> =>
   apiFetch(BacktestResultSchema, `${BASE}/backtest`, {
     method: "POST",

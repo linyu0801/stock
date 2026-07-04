@@ -36,16 +36,6 @@ export function CandlestickChart({ bars }: CandlestickChartProps) {
       rightPriceScale: { scaleMargins: { top: 0.08, bottom: 0.08 } },
     });
 
-    const candleSeries = chart.addCandlestickSeries({
-      upColor: "#ef4444",
-      downColor: "#22c55e",
-      borderUpColor: "#ef4444",
-      borderDownColor: "#22c55e",
-      wickUpColor: "#ef4444",
-      wickDownColor: "#22c55e",
-    });
-    candleSeries.setData(bars as CandlestickData[]);
-
     for (const { n, color } of MA_CONFIGS) {
       const maData = calcMA(bars, n);
       if (!maData.length) continue;
@@ -58,6 +48,16 @@ export function CandlestickChart({ bars }: CandlestickChartProps) {
       });
       maSeries.setData(maData);
     }
+
+    const candleSeries = chart.addCandlestickSeries({
+      upColor: "#ef4444",
+      downColor: "#22c55e",
+      borderUpColor: "#ef4444",
+      borderDownColor: "#22c55e",
+      wickUpColor: "#ef4444",
+      wickDownColor: "#22c55e",
+    });
+    candleSeries.setData(bars as CandlestickData[]);
 
     chart.timeScale().fitContent();
     return () => chart.remove();

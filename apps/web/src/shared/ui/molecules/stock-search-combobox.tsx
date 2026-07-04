@@ -10,31 +10,24 @@ export function StockSearchCombobox({ onSelect, placeholder = "輸入股票代�
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ symbol: string; name: string }[]>([]);
   const [open, setOpen] = useState(false);
+  const [dropUp, setDropUp] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
-    if (!query.trim()) {
-      setResults([]);
-      setOpen(false);
-      return;
-    }
+    if (!query.trim()) { setResults([]); setOpen(false); return; }
     timer.current = setTimeout(async () => {
       try {
         const data = await searchStocks(query);
-        console.log("[search]", query, data);
         setResults(data);
         setOpen(data.length > 0);
-      } catch (err) {
-        console.error("[search] error:", err);
-        setResults([]);
-        setOpen(false);
+      } catch {
+        setResults([]); setOpen(false);
       }
     }, 200);
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
+    return () => { if (timer.current) clearTimeout(timer.current); };
   }, [query]);
 
   useEffect(() => {
@@ -47,6 +40,15 @@ export function StockSearchCombobox({ onSelect, placeholder = "輸入股票代�
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Detect if dropdown would overflow bottom of viewport → flip upward
+  const handleFocus = () => {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setDropUp(spaceBelow < 200);
+    }
+  };
+
   const select = (symbol: string) => {
     onSelect(symbol);
     setQuery("");
@@ -55,62 +57,29 @@ export function StockSearchCombobox({ onSelect, placeholder = "輸入股票代�
   };
 
   return (
-    <div ref={containerRef} style={{ position: "relative", width: "100%" }}>
+    <div ref={containerRef} className="relative w-full">
       <input
+        ref={inputRef}
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={e => setQuery(e.target.value)}
+        onFocus={handleFocus}
+        onKeyDown={e => { if (e.key === "Escape") setOpen(false); }}
         placeholder={placeholder}
-        onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
-        style={{
-          width: "100%",
-          padding: "6px 10px",
-          border: "1px solid #e4e4e7",
-          borderRadius: "6px",
-          fontSize: "14px",
-          outline: "none",
-          background: "transparent",
-        }}
+        className="w-full px-2.5 py-1.5 rounded-md border border-border bg-input text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-ring transition-colors"
       />
       {open && (
-        <ul
-          style={{
-            position: "absolute",
-            top: "100%",
-            left: 0,
-            right: 0,
-            zIndex: 9999,
-            marginTop: "4px",
-            background: "white",
-            border: "1px solid #e4e4e7",
-            borderRadius: "6px",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-            listStyle: "none",
-            padding: 0,
-            margin: 0,
-          }}
+        <ul className={`absolute left-0 right-0 z-50 rounded-lg border border-border bg-popover shadow-lg overflow-hidden list-none p-0 m-0
+          ${dropUp ? "bottom-full mb-1" : "top-full mt-1"}`}
         >
-          {results.map((r) => (
+          {results.map(r => (
             <li key={r.symbol}>
               <button
                 type="button"
-                onMouseDown={(e) => { e.preventDefault(); select(r.symbol); }}
-                style={{
-                  display: "flex",
-                  width: "100%",
-                  alignItems: "center",
-                  gap: "12px",
-                  padding: "8px 12px",
-                  fontSize: "14px",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  textAlign: "left",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#f4f4f5")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                onMouseDown={e => { e.preventDefault(); select(r.symbol); }}
+                className="flex w-full items-center gap-3 px-3 py-2 text-sm text-left hover:bg-accent transition-colors"
               >
-                <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{r.symbol}</span>
-                <span style={{ color: "#71717a" }}>{r.name}</span>
+                <span className="font-mono font-semibold text-foreground">{r.symbol}</span>
+                <span className="text-muted-foreground">{r.name}</span>
               </button>
             </li>
           ))}

@@ -83,6 +83,43 @@ export const moveStock = (stockId: number, groupId: number) =>
       body: JSON.stringify({ group_id: groupId }),
     });
 
+export const updateStockNote = (stockId: number, note: string | null) =>
+  apiFetch(z.object({ id: z.number(), note: z.string().nullable() }),
+    `${BASE}/watchlist/stocks/${stockId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note }),
+    });
+
+export const createSublabel = (groupId: number, label: string) =>
+  apiFetch(z.object({ id: z.number(), group_id: z.number(), label: z.string() }),
+    `${BASE}/watchlist/sublabels`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ group_id: groupId, label }),
+    });
+
+export const updateSublabel = (sublabelId: number, label: string) =>
+  apiFetch(z.object({ id: z.number(), label: z.string() }),
+    `${BASE}/watchlist/sublabels/${sublabelId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label }),
+    });
+
+export const deleteSublabel = async (sublabelId: number): Promise<void> => {
+  const res = await fetch(`${BASE}/watchlist/sublabels/${sublabelId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+};
+
+export type ReorderItem = { type: "stock" | "sublabel"; id: number };
+export const reorderGroupItems = (groupId: number, items: ReorderItem[]): Promise<{ ok: boolean }> =>
+  apiFetch(z.object({ ok: z.boolean() }), `${BASE}/watchlist/reorder`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ group_id: groupId, items }),
+  });
+
 export const runBacktest = (req: BacktestRequest): Promise<BacktestResult> =>
   apiFetch(BacktestResultSchema, `${BASE}/backtest`, {
     method: "POST",

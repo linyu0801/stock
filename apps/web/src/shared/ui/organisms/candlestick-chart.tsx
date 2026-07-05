@@ -34,6 +34,8 @@ export function CandlestickChart({ bars, height = 480 }: CandlestickChartProps) 
   const containerRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
 
+  const intraday = typeof bars[0]?.time === "number";
+
   useEffect(() => {
     if (!containerRef.current || !bars.length) return;
     const palette = CHART_PALETTE[theme];
@@ -43,7 +45,8 @@ export function CandlestickChart({ bars, height = 480 }: CandlestickChartProps) 
       height,
       layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: palette.text },
       grid: { vertLines: { color: palette.grid }, horzLines: { color: palette.grid } },
-      timeScale: { barSpacing: 8, minBarSpacing: 3 },
+      // minBarSpacing 太大會夾住 fitContent，長區間（5y ~1250 根）只顯示得下尾段
+      timeScale: { barSpacing: 8, minBarSpacing: 0.5, timeVisible: intraday, secondsVisible: false },
       rightPriceScale: { scaleMargins: { top: 0.08, bottom: 0.08 } },
     });
 
@@ -72,20 +75,26 @@ export function CandlestickChart({ bars, height = 480 }: CandlestickChartProps) 
 
     chart.timeScale().fitContent();
     return () => chart.remove();
-  }, [bars, theme, height]);
+  }, [bars, theme, height, intraday]);
 
   if (!bars.length) {
     return <div className="flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>載入中…</div>;
   }
 
+  const maLatest: Record<number, number | undefined> = Object.fromEntries(
+    MA_CONFIGS.map(({ n }) => [n, calcMA(bars, n).at(-1)?.value]),
+  );
+
   return (
     <div>
       <div ref={containerRef} className="w-full" style={{ height }} />
       <div className="mt-1 flex flex-wrap gap-3 px-1">
-        {MA_CONFIGS.map(({ n, color, label }) => (
-          <span key={n} className="flex items-center gap-1 text-xs text-muted-foreground">
+        {MA_CONFIGS.filter(({ n }) => maLatest[n] != null).map(({ n, color, label }) => (
+          <span key={n} className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
             <span style={{ display: "inline-block", width: 16, height: 2, background: color, borderRadius: 1 }} />
-            {label}
+            {/* 盤中是 5 分 K，週線/月線的稱呼不適用 */}
+            {intraday ? `MA${n}` : label}
+            {` (${maLatest[n]!.toFixed(2)})`}
           </span>
         ))}
       </div>
@@ -112,7 +121,7 @@ export function BiasChart({ biasPoints, biasN, height = 160 }: BiasChartProps) {
       height,
       layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: palette.text },
       grid: { vertLines: { color: palette.grid }, horzLines: { color: palette.grid } },
-      timeScale: { barSpacing: 8, minBarSpacing: 3 },
+      timeScale: { barSpacing: 8, minBarSpacing: 0.5 },
       rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.1 } },
     });
 

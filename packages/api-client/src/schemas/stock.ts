@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 export const OHLCVBarSchema = z.object({
-  time: z.string(),
+  // 日線為 "YYYY-MM-DD" 字串；盤中（1d）為 epoch 秒
+  time: z.union([z.string(), z.number()]),
   open: z.number(),
   high: z.number(),
   low: z.number(),

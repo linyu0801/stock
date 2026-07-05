@@ -5,7 +5,7 @@ from services.stock_meta import search_stocks, count_stocks, sync_stock_list
 
 router = APIRouter(prefix="/api/stock")
 
-VALID_PERIODS = {"1mo", "3mo", "6mo", "1y", "2y", "5y"}
+VALID_PERIODS = {"1d", "3d", "1mo", "3mo", "6mo", "1y", "2y", "5y"}
 VALID_N = {5, 10, 20, 60}
 
 @router.get("/search")

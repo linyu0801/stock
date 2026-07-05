@@ -46,8 +46,11 @@ def download_history(symbol: str, period: str) -> list[dict[str, Any]]:
     if not yahoo_sym:
         print(f"[fetcher] {symbol} not found on Yahoo (.TW / .TWO both failed)")
         return []
+    intraday = period in ("1d", "3d")
+    # Yahoo 沒有 3d range：抓 5d 再裁掉多的交易日
+    yahoo_range = "5d" if period == "3d" else period
     try:
-        data = _yahoo_get(yahoo_sym, f"range={period}&interval=1d")
+        data = _yahoo_get(yahoo_sym, f"range={yahoo_range}&interval={'5m' if intraday else '1d'}")
     except Exception as e:
         print(f"[fetcher] {symbol} history failed: {e}")
         return []
@@ -71,7 +74,8 @@ def download_history(symbol: str, period: str) -> list[dict[str, Any]]:
             if closes[i] is None:
                 continue
             bars.append({
-                "time":   datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d"),
+                # 盤中回 epoch 秒並平移 +8h，lightweight-charts 以 UTC 顯示時剛好是台灣時間
+                "time":   ts + 8 * 3600 if intraday else datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d"),
                 "open":   round(float(opens[i]),  2),
                 "high":   round(float(highs[i]),  2),
                 "low":    round(float(lows[i]),   2),
@@ -80,6 +84,11 @@ def download_history(symbol: str, period: str) -> list[dict[str, Any]]:
             })
         except (TypeError, IndexError, ValueError):
             continue
+
+    if period == "3d":
+        last_dates = sorted({datetime.utcfromtimestamp(b["time"]).date() for b in bars})[-3:]
+        keep = set(last_dates)
+        bars = [b for b in bars if datetime.utcfromtimestamp(b["time"]).date() in keep]
 
     return bars
 

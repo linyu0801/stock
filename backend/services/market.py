@@ -50,7 +50,11 @@ def _fetch_twse(date_param: str | None) -> tuple[list[dict], str] | None:
             diff    = float(row[9].replace(",", ""))
             prev    = close - diff
             pct     = round(diff / prev * 100, 2) if prev != 0 else 0.0
-            result.append({"symbol": symbol, "name": name, "close": close, "change_pct": pct})
+            try:
+                volume = int(row[3].replace(",", ""))
+            except (ValueError, IndexError):
+                volume = 0
+            result.append({"symbol": symbol, "name": name, "close": close, "change_pct": pct, "volume": volume})
         except (ValueError, IndexError):
             continue
     return result, date
@@ -81,7 +85,11 @@ def _fetch_tpex(date_param: str | None) -> tuple[list[dict], str] | None:
             diff   = float(diff_s)
             prev   = close - diff
             pct    = round(diff / prev * 100, 2) if prev != 0 else 0.0
-            result.append({"symbol": symbol, "name": name, "close": close, "change_pct": pct})
+            try:
+                volume = int(row[8].replace(",", ""))
+            except (ValueError, IndexError):
+                volume = 0
+            result.append({"symbol": symbol, "name": name, "close": close, "change_pct": pct, "volume": volume})
         except (ValueError, IndexError):
             continue
     return result, date
@@ -130,10 +138,11 @@ def get_movers(top_n: int = 30) -> dict:
             print(f"[market] date={date_param or 'latest'} twse={len(twse[0]) if twse else 0} tpex={len(tpex[0]) if tpex else 0}")
             gainers = sorted([r for r in all_stocks if r["change_pct"] > 0], key=lambda x: x["change_pct"], reverse=True)
             losers  = sorted([r for r in all_stocks if r["change_pct"] < 0], key=lambda x: x["change_pct"])
-            result  = {"gainers": gainers[:top_n], "losers": losers[:top_n], "date": date}
+            volume  = sorted(all_stocks, key=lambda x: x.get("volume", 0), reverse=True)
+            result  = {"gainers": gainers[:top_n], "losers": losers[:top_n], "volume": volume[:top_n], "date": date}
             _movers_cache = (time.time(), result)
             return result
         except Exception as e:
             print(f"[market] fetch failed for {date_param}: {e}")
 
-    return {"gainers": [], "losers": [], "date": None}
+    return {"gainers": [], "losers": [], "volume": [], "date": None}

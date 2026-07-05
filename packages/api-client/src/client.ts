@@ -120,14 +120,48 @@ export const reorderGroupItems = (groupId: number, items: ReorderItem[]): Promis
     body: JSON.stringify({ group_id: groupId, items }),
   });
 
-const MoverSchema = z.object({ symbol: z.string(), name: z.string(), close: z.number(), change_pct: z.number() });
+const MoverSchema = z.object({ symbol: z.string(), name: z.string(), close: z.number(), change_pct: z.number(), volume: z.number() });
 export type Mover = z.infer<typeof MoverSchema>;
-export type MoversResponse = { gainers: Mover[]; losers: Mover[]; date: string | null };
+export type MoversResponse = { gainers: Mover[]; losers: Mover[]; volume: Mover[]; date: string | null };
 export const getMarketMovers = (): Promise<MoversResponse> =>
   apiFetch(
-    z.object({ gainers: z.array(MoverSchema), losers: z.array(MoverSchema), date: z.string().nullable() }),
+    z.object({
+      gainers: z.array(MoverSchema),
+      losers: z.array(MoverSchema),
+      volume: z.array(MoverSchema),
+      date: z.string().nullable(),
+    }),
     `${BASE}/market/movers`,
   );
+
+const ConceptSchema = z.object({ category: z.string(), name: z.string() });
+export type Concept = z.infer<typeof ConceptSchema>;
+export const getConcepts = (): Promise<Concept[]> =>
+  apiFetch(z.array(ConceptSchema), `${BASE}/market/concepts`);
+
+const ConceptStockSchema = z.object({
+  symbol: z.string(),
+  name: z.string(),
+  close: z.number().nullable(),
+  change_pct: z.number().nullable(),
+});
+export type ConceptStock = z.infer<typeof ConceptStockSchema>;
+export const getConceptStocks = (category: string): Promise<ConceptStock[]> =>
+  apiFetch(
+    z.object({ stocks: z.array(ConceptStockSchema) }),
+    `${BASE}/market/concepts/${encodeURIComponent(category)}`,
+  ).then((r) => r.stocks);
+
+const SectorIndexSchema = z.object({
+  symbol: z.string(),
+  name: z.string(),
+  close: z.number().nullable(),
+  change_pct: z.number().nullable(),
+  spark: z.array(z.number()),
+});
+export type SectorIndex = z.infer<typeof SectorIndexSchema>;
+export const getSectorIndices = (): Promise<SectorIndex[]> =>
+  apiFetch(z.array(SectorIndexSchema), `${BASE}/market/sectors`);
 
 export const runBacktest = (req: BacktestRequest): Promise<BacktestResult> =>
   apiFetch(BacktestResultSchema, `${BASE}/backtest`, {

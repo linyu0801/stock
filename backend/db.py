@@ -27,4 +27,16 @@ def init_db() -> None:
                 symbol TEXT PRIMARY KEY,
                 name   TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS concepts (
+                category   TEXT PRIMARY KEY,
+                name       TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS concept_stocks (
+                category   TEXT NOT NULL,
+                symbol     TEXT NOT NULL,
+                name       TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (category, symbol)
+            );
         """)

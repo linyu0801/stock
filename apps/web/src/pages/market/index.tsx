@@ -1,7 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { getMarketMovers, type MoversResponse } from "@taiwan-stock/api-client";
 import { Skeleton } from "@/shared/ui/atoms/skeleton";
 import { MoverTable } from "./organisms/MoverTable";
+import { ConceptSection } from "./organisms/ConceptSection";
+import { SectorStrip } from "./organisms/SectorStrip";
 
 const fetchMarketMovers = (): Promise<MoversResponse> => {
   const timeout = new Promise<never>((_, reject) =>
@@ -11,6 +14,8 @@ const fetchMarketMovers = (): Promise<MoversResponse> => {
 };
 
 const MarketPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { concept } = useSearch({ from: "/" });
   const { data, isLoading: loading, error } = useQuery<MoversResponse>({
     queryKey: ["market-movers"],
     queryFn: fetchMarketMovers,
@@ -18,21 +23,16 @@ const MarketPage: React.FC = () => {
   });
 
   return (
-    <div className="p-8 max-w-5xl">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold">今日市場</h1>
+    <div className="p-4 sm:p-8 max-w-5xl space-y-5">
+      <div>
+        <h1 className="font-display text-xl font-bold">今日市場</h1>
         <p className="text-sm text-muted-foreground mt-1">
         台股上市收盤後資料
         {data?.date && <span className="ml-2 text-xs bg-muted px-2 py-0.5 rounded-full">資料日期：{data.date}</span>}
       </p>
       </div>
 
-      {loading && (
-        <div className="grid grid-cols-2 gap-5">
-          <Skeleton className="h-96 rounded-xl" />
-          <Skeleton className="h-96 rounded-xl" />
-        </div>
-      )}
+      {loading && <Skeleton className="h-96 rounded-xl" />}
 
       {error && (
         <div className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3">
@@ -47,11 +47,17 @@ const MarketPage: React.FC = () => {
       )}
 
       {data && (data.gainers.length > 0 || data.losers.length > 0) && (
-        <div className="grid grid-cols-2 gap-5">
-          <MoverTable title="漲幅前段" items={data.gainers} accentClass="bg-gain" />
-          <MoverTable title="跌幅前段" items={data.losers} accentClass="bg-loss" />
-        </div>
+        <MoverTable data={data} />
       )}
+
+      <ConceptSection
+        selected={concept}
+        onSelect={(category) =>
+          navigate({ to: "/", search: { concept: category }, replace: true })
+        }
+      />
+
+      <SectorStrip />
     </div>
   );
 };

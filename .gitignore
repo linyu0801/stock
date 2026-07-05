@@ -25,3 +25,5 @@ Thumbs.db
 .playwright-mcp/
 .claude/settings.local.json
 .claude/tmp/
+.agents/
+.claude/skills/

@@ -1,6 +1,14 @@
 import { useEffect, useRef } from "react";
 import { createChart, CandlestickData, LineData, ColorType } from "lightweight-charts";
 import type { OHLCVBar, IndicatorPoint } from "@taiwan-stock/api-client";
+import { useTheme, type Theme } from "@/shared/lib/theme";
+
+const CHART_PALETTE: Record<Theme, {
+  text: string; grid: string; zero: string; up: string; down: string;
+}> = {
+  dark:  { text: "#6B6B85", grid: "#1E1E30", zero: "#3F3F55", up: "#FF4560", down: "#00C896" },
+  light: { text: "#6A6688", grid: "#E3E0EF", zero: "#B9B5CC", up: "#DB2745", down: "#008A6C" },
+};
 
 const MA_CONFIGS = [
   { n: 5,  color: "#3b82f6", label: "MA5 週線"  },
@@ -19,19 +27,22 @@ function calcMA(bars: OHLCVBar[], n: number): LineData[] {
 
 interface CandlestickChartProps {
   bars: OHLCVBar[];
+  height?: number;
 }
 
-export function CandlestickChart({ bars }: CandlestickChartProps) {
+export function CandlestickChart({ bars, height = 480 }: CandlestickChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const theme = useTheme();
 
   useEffect(() => {
     if (!containerRef.current || !bars.length) return;
+    const palette = CHART_PALETTE[theme];
 
     const chart = createChart(containerRef.current, {
       autoSize: true,
-      height: 480,
-      layout: { background: { type: ColorType.Solid, color: "#09090b" }, textColor: "#e4e4e7" },
-      grid: { vertLines: { color: "#27272a" }, horzLines: { color: "#27272a" } },
+      height,
+      layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: palette.text },
+      grid: { vertLines: { color: palette.grid }, horzLines: { color: palette.grid } },
       timeScale: { barSpacing: 8, minBarSpacing: 3 },
       rightPriceScale: { scaleMargins: { top: 0.08, bottom: 0.08 } },
     });
@@ -50,27 +61,27 @@ export function CandlestickChart({ bars }: CandlestickChartProps) {
     }
 
     const candleSeries = chart.addCandlestickSeries({
-      upColor: "#ef4444",
-      downColor: "#22c55e",
-      borderUpColor: "#ef4444",
-      borderDownColor: "#22c55e",
-      wickUpColor: "#ef4444",
-      wickDownColor: "#22c55e",
+      upColor: palette.up,
+      downColor: palette.down,
+      borderUpColor: palette.up,
+      borderDownColor: palette.down,
+      wickUpColor: palette.up,
+      wickDownColor: palette.down,
     });
     candleSeries.setData(bars as CandlestickData[]);
 
     chart.timeScale().fitContent();
     return () => chart.remove();
-  }, [bars]);
+  }, [bars, theme, height]);
 
   if (!bars.length) {
-    return <div className="flex h-[480px] items-center justify-center text-sm text-muted-foreground">載入中…</div>;
+    return <div className="flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>載入中…</div>;
   }
 
   return (
     <div>
-      <div ref={containerRef} className="w-full" style={{ height: 480 }} />
-      <div className="mt-1 flex gap-3 px-1">
+      <div ref={containerRef} className="w-full" style={{ height }} />
+      <div className="mt-1 flex flex-wrap gap-3 px-1">
         {MA_CONFIGS.map(({ n, color, label }) => (
           <span key={n} className="flex items-center gap-1 text-xs text-muted-foreground">
             <span style={{ display: "inline-block", width: 16, height: 2, background: color, borderRadius: 1 }} />
@@ -85,19 +96,22 @@ export function CandlestickChart({ bars }: CandlestickChartProps) {
 interface BiasChartProps {
   biasPoints: IndicatorPoint[];
   biasN: number;
+  height?: number;
 }
 
-export function BiasChart({ biasPoints, biasN }: BiasChartProps) {
+export function BiasChart({ biasPoints, biasN, height = 160 }: BiasChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const theme = useTheme();
 
   useEffect(() => {
     if (!containerRef.current || !biasPoints.length) return;
+    const palette = CHART_PALETTE[theme];
 
     const chart = createChart(containerRef.current, {
       autoSize: true,
-      height: 160,
-      layout: { background: { type: ColorType.Solid, color: "#09090b" }, textColor: "#e4e4e7" },
-      grid: { vertLines: { color: "#27272a" }, horzLines: { color: "#27272a" } },
+      height,
+      layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: palette.text },
+      grid: { vertLines: { color: palette.grid }, horzLines: { color: palette.grid } },
       timeScale: { barSpacing: 8, minBarSpacing: 3 },
       rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.1 } },
     });
@@ -111,19 +125,18 @@ export function BiasChart({ biasPoints, biasN }: BiasChartProps) {
     });
     series.setData(biasPoints as LineData[]);
 
-    // zero line
-    series.createPriceLine({ price: 0, color: "#52525b", lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: "" });
+    series.createPriceLine({ price: 0, color: palette.zero, lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: "" });
 
     chart.timeScale().fitContent();
     return () => chart.remove();
-  }, [biasPoints, biasN]);
+  }, [biasPoints, biasN, theme, height]);
 
   if (!biasPoints.length) return null;
 
   return (
     <div>
       <div className="px-1 py-1 text-xs text-muted-foreground">乖離率 {biasN} 日</div>
-      <div ref={containerRef} className="w-full" style={{ height: 160 }} />
+      <div ref={containerRef} className="w-full" style={{ height }} />
     </div>
   );
 }

@@ -1,0 +1,13 @@
+import { useSyncExternalStore } from "react";
+
+export const useMediaQuery = (query: string): boolean =>
+  useSyncExternalStore(
+    (cb) => {
+      const mql = window.matchMedia(query);
+      mql.addEventListener("change", cb);
+      return () => mql.removeEventListener("change", cb);
+    },
+    () => window.matchMedia(query).matches,
+  );
+
+export const useIsDesktop = () => useMediaQuery("(min-width: 1024px)");

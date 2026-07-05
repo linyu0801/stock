@@ -9,6 +9,7 @@ import { SublabelModal } from "../molecules/SublabelModal";
 type Props = {
   group: Group;
   prices: Record<string, StockPrice>;
+  selectedSymbol?: string;
   onStockClick: (symbol: string) => void;
   onRemoveStock: (id: number) => void;
   onAddStock: (symbol: string) => void;
@@ -22,7 +23,7 @@ type Props = {
 type LocalItem = { key: string; type: "stock" | "sublabel"; id: number };
 
 export const GroupPanel: React.FC<Props> = ({
-  group, prices,
+  group, prices, selectedSymbol,
   onStockClick, onRemoveStock, onAddStock, onNoteChange,
   onCreateSublabel, onRenameSublabel, onDeleteSublabel, onReorder,
 }) => {
@@ -60,7 +61,7 @@ export const GroupPanel: React.FC<Props> = ({
   const stockMap = Object.fromEntries(group.stocks.map(s => [s.id, s]));
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+    <div className="@container flex-1 flex flex-col h-full overflow-hidden relative">
       <div className="px-5 py-4 border-b border-border flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           <h2 className="text-base font-bold">{group.name}</h2>
@@ -88,13 +89,14 @@ export const GroupPanel: React.FC<Props> = ({
           </div>
         );
       })()}
-      <div className="grid gap-3 px-5 py-2 border-b border-border shrink-0 text-[11px] text-muted-foreground grid-cols-[16px_1fr_72px_64px_80px_72px_40px]">
-        <span /><span>股票</span>
+      <div className="grid gap-3 px-4 @lg:px-5 py-2 border-b border-border shrink-0 text-[11px] text-muted-foreground grid-cols-[minmax(0,1fr)_72px_76px] @lg:grid-cols-[16px_1fr_72px_64px_80px_72px_40px]">
+        <span className="hidden @lg:block" />
+        <span>股票</span>
         <span className="text-right">現價</span>
-        <span className="text-right">漲跌</span>
+        <span className="hidden @lg:block text-right">漲跌</span>
         <span className="text-right">漲跌%</span>
-        <span className="text-right">成交量</span>
-        <span />
+        <span className="hidden @lg:block text-right">成交量</span>
+        <span className="hidden @lg:block" />
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -131,6 +133,7 @@ export const GroupPanel: React.FC<Props> = ({
               key={li.key}
               s={s}
               price={prices[s.symbol]}
+              selected={s.symbol === selectedSymbol}
               onClick={() => onStockClick(s.symbol)}
               onRemove={() => onRemoveStock(s.id)}
               onNoteChange={note => onNoteChange(s.id, note)}

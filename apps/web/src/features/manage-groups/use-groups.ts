@@ -8,6 +8,7 @@ import {
 import type { Group, BatchAddItem } from "@taiwan-stock/api-client";
 
 const QUERY_KEY = ["watchlist"] as const;
+const EMPTY_GROUPS: Group[] = [];
 
 export function useGroups() {
   const qc = useQueryClient();
@@ -17,12 +18,16 @@ export function useGroups() {
     queryKey: QUERY_KEY,
     queryFn: getWatchlist,
   });
-  const groups: Group[] = data ?? [];
+  const groups: Group[] = data ?? EMPTY_GROUPS;
 
   return {
     groups,
     loading,
-    createGroup: (name: string) => createGroup(name).then(invalidate),
+    createGroup: async (name: string) => {
+      const g = await createGroup(name);
+      await invalidate();
+      return g;
+    },
     renameGroup: (id: number, name: string) => renameGroup(id, name).then(invalidate),
     deleteGroup: (id: number) => deleteGroup(id).then(invalidate),
     addStock: (symbol: string, groupId: number) => addStock(symbol, groupId).then(invalidate),

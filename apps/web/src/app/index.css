@@ -2,6 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource-variable/noto-sans-tc";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -29,12 +31,38 @@
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --font-sans: 'Geist Variable', sans-serif;
+  --font-sans: 'Geist Variable', 'Noto Sans TC Variable', sans-serif;
+  --font-display: 'Bricolage Grotesque Variable', 'Noto Sans TC Variable', sans-serif;
   --font-mono: 'Geist Variable', monospace;
 }
 
 @layer base {
   :root {
+    color-scheme: light;
+    --background: #F6F5FA;
+    --foreground: #211E36;
+    --card: #FFFFFF;
+    --card-foreground: #211E36;
+    --popover: #FFFFFF;
+    --popover-foreground: #211E36;
+    --primary: #6250E8;
+    --primary-foreground: #FFFFFF;
+    --secondary: #EDEBF7;
+    --secondary-foreground: #211E36;
+    --muted: #EDEBF7;
+    --muted-foreground: #6A6688;
+    --accent: #E9E5FB;
+    --accent-foreground: #4F3ED6;
+    --destructive: #D92645;
+    --border: #E3E0EF;
+    --input: #FFFFFF;
+    --ring: #6250E8;
+    --gain: #DB2745;
+    --loss: #008A6C;
+    --radius: 0.5rem;
+  }
+  .dark {
+    color-scheme: dark;
     --background: #0D0D14;
     --foreground: #E8E8F0;
     --card: #13131E;
@@ -55,7 +83,6 @@
     --ring: #7B6EF6;
     --gain: #FF4560;
     --loss: #00C896;
-    --radius: 0.5rem;
   }
   * {
     @apply border-border outline-ring/50;
@@ -64,5 +91,6 @@
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
     font-feature-settings: "tnum";
+    touch-action: manipulation;
   }
 }

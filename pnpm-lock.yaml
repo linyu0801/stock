@@ -17,9 +17,15 @@ importers:
       '@base-ui/react':
         specifier: ^1.6.0
         version: 1.6.0(@types/react@18.3.31)(react-dom@18.3.1)(react@18.3.1)
+      '@fontsource-variable/bricolage-grotesque':
+        specifier: ^5.2.10
+        version: 5.2.10
       '@fontsource-variable/geist':
         specifier: ^5.2.9
         version: 5.2.9
+      '@fontsource-variable/noto-sans-tc':
+        specifier: ^5.2.10
+        version: 5.2.10
       '@taiwan-stock/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
@@ -710,8 +716,16 @@ packages:
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
     dev: false
 
+  /@fontsource-variable/bricolage-grotesque@5.2.10:
+    resolution: {integrity: sha512-5EDsCqgGpKVcJWE4sg9ydli+t5WM97mISYw5lla/Ev4z71FwXh1oN0YUU8xjkRW9+wBCGD9R+ntAvI8G4bUFJg==}
+    dev: false
+
   /@fontsource-variable/geist@5.2.9:
     resolution: {integrity: sha512-TP+QSBG3wxKGPE33CbMy/L0Nu3qvJ6Fy81Yc4LnQ95xH+i+cfEp8fyU8/kfV14YwszxIFPhnoMTbjL71waVpyQ==}
+    dev: false
+
+  /@fontsource-variable/noto-sans-tc@5.2.10:
+    resolution: {integrity: sha512-COVssWiIp9VVfdGuHpbrcH8u9H5JK4Lm6U7oee2BD6aLwKzPshj49KGmmQe/r3Fcp4e4SSuCaqyN/BtDKxHOGQ==}
     dev: false
 
   /@hono/node-server@1.19.14(hono@4.12.27):

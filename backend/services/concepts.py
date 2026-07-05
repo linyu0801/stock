@@ -114,7 +114,8 @@ def _fetch_concept_stocks_from_yahoo(category: str) -> list[dict]:
     result = []
     for s in all_items:
         symbol_raw = s.get("symbol", "")
-        symbol = symbol_raw.replace(".TW", "").replace(".TWO", "")
+        # 順序重要：先去 .TWO 再去 .TW（反過來 "5490.TWO" 會變成 "5490O"）
+        symbol = symbol_raw.removesuffix(".TWO").removesuffix(".TW")
         # top-level fields: price = {"raw": "14.1", ...}, changePercent = "-2.42%"
         pct_str = (s.get("changePercent") or "").rstrip("%")
         try:

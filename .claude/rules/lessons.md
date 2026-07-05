@@ -14,6 +14,12 @@
 - 正解：`get_movers()` 往回走 7 天找最近可用日；已固化在 `backend/CLAUDE.md`
 - 制度修正：無（示範格式）
 
+## 2026-07-05 Yahoo _td-stock getClassQuotes API 的三個坑
+- 症狀：概念股報價解析出 null；或無 Referer 時請求失敗
+- 錯路：以為欄位包在 `price.regularMarket*` 底下、changePercent 是小數
+- 正解：(1) 必帶 `Referer: https://tw.stock.yahoo.com/class-quote?...` header；(2) 欄位在 item 頂層：`price={"raw":"14.1",...}`（raw 是字串要轉 float）、`changePercent="-2.42%"`（含 % 的字串）、`symbol="2314.TW"`；(3) 分頁每次 30 筆，迴圈到 `pagination.resultsTotal`。實測紀錄在 `.claude/tmp/concept-stock-sources.md`，實作在 `services/concepts.py`
+- 制度修正：建議 backend/CLAUDE.md 加 concepts 一節（待使用者同意）
+
 ## 2026-07-04 專案 rules 精簡：通用制度移交全域，letter.md 的檔案引用已過時
 - 症狀：專案 `.claude/rules/` 與全域 `~/.claude/rules/` 內容高度重疊，雙倍常駐成本
 - 錯路：無（依使用者指示重構）

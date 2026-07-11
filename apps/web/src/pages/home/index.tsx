@@ -5,8 +5,15 @@ import { Plus } from 'lucide-react';
 import { useGroups } from '@/features/manage-groups/use-groups';
 import {
   getStockPrices,
+  getValuations,
+  getDispositionFlags,
+  getEtfPremium,
   type StockPrice,
+  type StockValuation,
+  type Valuation,
   type Group,
+  type DispositionFlag,
+  type EtfPremium,
 } from '@taiwan-stock/api-client';
 import { useMediaQuery } from '@/shared/lib/use-media';
 import StockDetailPanel from '@/widgets/stock-detail';
@@ -65,6 +72,34 @@ const HomePage: React.FC = () => {
   const prices: Record<string, StockPrice> = Object.fromEntries(
     priceList.map((p) => [p.symbol, p]),
   );
+
+  const { data: valuationList } = useQuery<StockValuation[]>({
+    queryKey: ['valuations', symbolsKey],
+    queryFn: () => getValuations(symbols),
+    enabled: symbols.length > 0,
+    staleTime: 1000 * 60 * 60,
+  });
+  const valuations: Record<string, Valuation> = Object.fromEntries(
+    (valuationList ?? []).map((v) => [v.symbol, v]),
+  );
+
+  const etfSymbols = symbols.filter((s) => s.startsWith('00'));
+
+  const { data: flagsData } = useQuery<Record<string, DispositionFlag>>({
+    queryKey: ['disposition-flags', symbolsKey],
+    queryFn: () => getDispositionFlags(symbols),
+    enabled: symbols.length > 0,
+    staleTime: 1000 * 60 * 60,
+  });
+  const flags = flagsData ?? {};
+
+  const { data: premiumsData } = useQuery<Record<string, EtfPremium>>({
+    queryKey: ['etf-premiums', etfSymbols.join(',')],
+    queryFn: () => getEtfPremium(etfSymbols),
+    enabled: etfSymbols.length > 0,
+    staleTime: 1000 * 60 * 60,
+  });
+  const premiums = premiumsData ?? {};
 
   const sortedGroups = groupOrder
     .map((id) => groups.find((g) => g.id === id))
@@ -175,6 +210,9 @@ const HomePage: React.FC = () => {
               key={activeGroup.id}
               group={activeGroup}
               prices={prices}
+              valuations={valuations}
+              flags={flags}
+              premiums={premiums}
               selectedSymbol={inlineDetail ? detailSymbol : undefined}
               onStockClick={handleStockClick}
               onRemoveStock={removeStock}

@@ -6,6 +6,9 @@ from api.stock import router as stock_router
 from api.watchlist import router as watchlist_router
 from api.backtest import router as backtest_router
 from api.market import router as market_router
+from api.fundamentals import router as fundamentals_router
+from api.disposition import router as disposition_router
+from api.etf import router as etf_router
 from services.stock_meta import sync_stock_list
 
 app = FastAPI(title="Taiwan Stock API")
@@ -26,6 +29,9 @@ app.include_router(stock_router)
 app.include_router(watchlist_router)
 app.include_router(backtest_router)
 app.include_router(market_router)
+app.include_router(fundamentals_router)
+app.include_router(disposition_router)
+app.include_router(etf_router)
 
 @app.get("/api/health")
 def health():

@@ -31,3 +31,15 @@
 - 錯路：無（依使用者指示重構）
 - 正解：刪除專案的 `dispatch.md`／`templates.md`／`judgment.md`／`00-diagnosis.md`（全域版已完整覆蓋；原檔備份在本目錄 `_backup-*`）；專案特有的驗證指令表與品質檢查抽出成 `verification.md`。`letter.md` 是歷史文件不改——其中提到的專案 `judgment.md`／`dispatch.md`／`templates.md`，現在請對應到全域 `~/.claude/rules/` 的同名檔，驗證指令表對應本目錄 `verification.md`
 - 制度修正：root `CLAUDE.md` 路由表與 `maintenance.md` 權限表已同步更新
+
+## 2026-07-11 ETF 淨值/折溢價：TWSE openapi 沒有，用 ETFortune 內部 API（日頻）
+- 症狀：找不到官方彙整的 ETF NAV/折溢價 endpoint（TWSE 144＋TPEX 225 個 path 全查過）
+- 錯路：以為「ETF 申贖及即時淨值揭露專區」是 TWSE 的 API——其實是分散式規格，各投信自架 URL，TWSE 不彙整
+- 正解：`POST https://www.twse.com.tw/zh/ETFortune/ajaxEtfInfoChart`（body: `id`/`startDate`/`endDate`/`type=fundPric`，帶 Referer `.../ETFortune/etfInfo/<code>`）→ 回 `{"netPrice":[{date,count}],"atmps":[{date,count}]}`，atmps.count 即折溢價 %。僅日頻；**有髒日期**（如 2036/01/04）務必過濾查詢窗外資料。實作在 `services/etf.py`
+- 制度修正：無
+
+## 2026-07-11 處置/注意股期間欄位：兩市格式不同且會變
+- 症狀：TWSE punish 的 `DispositionPeriod` 分隔符，調查時實測「至」，隔日實測變全形「～」；TPEX 用半形「~」；日期為民國年（TWSE 帶斜線、TPEX 不帶），TPEX warning 的 Date 卻是西元
+- 錯路：寫死單一分隔符／單一日期格式
+- 正解：多分隔符 fallback（"至"、"～"、"~"）＋以位數區分民國(7)/西元(8)，解析失敗記 log 不靜默；TWSE notice 無資料時回一筆全空白 placeholder 要濾掉。實作在 `services/disposition.py`
+- 制度修正：無

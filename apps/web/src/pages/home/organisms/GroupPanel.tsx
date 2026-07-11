@@ -1,14 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import { Plus } from "lucide-react";
-import type { Group, StockPrice, ReorderItem } from "@taiwan-stock/api-client";
+import type { Group, StockPrice, Valuation, ReorderItem, DispositionFlag, EtfPremium } from "@taiwan-stock/api-client";
 import { StockSearchCombobox } from "@/shared/ui/molecules/stock-search-combobox";
 import { StockRow } from "../molecules/StockRow";
 import { SublabelRow } from "../molecules/SublabelRow";
 import { SublabelModal } from "../molecules/SublabelModal";
+import { ROW_GRID } from "../row-grid";
 
 type Props = {
   group: Group;
   prices: Record<string, StockPrice>;
+  valuations: Record<string, Valuation>;
+  flags: Record<string, DispositionFlag>;
+  premiums: Record<string, EtfPremium>;
   selectedSymbol?: string;
   onStockClick: (symbol: string) => void;
   onRemoveStock: (id: number) => void;
@@ -23,7 +27,7 @@ type Props = {
 type LocalItem = { key: string; type: "stock" | "sublabel"; id: number };
 
 export const GroupPanel: React.FC<Props> = ({
-  group, prices, selectedSymbol,
+  group, prices, valuations, flags, premiums, selectedSymbol,
   onStockClick, onRemoveStock, onAddStock, onNoteChange,
   onCreateSublabel, onRenameSublabel, onDeleteSublabel, onReorder,
 }) => {
@@ -89,13 +93,15 @@ export const GroupPanel: React.FC<Props> = ({
           </div>
         );
       })()}
-      <div className="grid gap-3 px-4 @lg:px-5 py-2 border-b border-border shrink-0 text-[11px] text-muted-foreground grid-cols-[minmax(0,1fr)_72px_76px] @lg:grid-cols-[16px_1fr_72px_64px_80px_72px_40px]">
+      <div className={`grid gap-3 px-4 @lg:px-5 py-2 border-b border-border shrink-0 text-[11px] text-muted-foreground ${ROW_GRID}`}>
         <span className="hidden @lg:block" />
         <span>股票</span>
         <span className="text-right">現價</span>
         <span className="hidden @lg:block text-right">漲跌</span>
         <span className="text-right">漲跌%</span>
         <span className="hidden @lg:block text-right">成交量</span>
+        <span className="hidden @3xl:block text-right">本益比</span>
+        <span className="hidden @3xl:block text-right">殖利率</span>
         <span className="hidden @lg:block" />
       </div>
 
@@ -133,6 +139,9 @@ export const GroupPanel: React.FC<Props> = ({
               key={li.key}
               s={s}
               price={prices[s.symbol]}
+              valuation={valuations[s.symbol]}
+              flag={flags[s.symbol]}
+              premium={premiums[s.symbol]}
               selected={s.symbol === selectedSymbol}
               onClick={() => onStockClick(s.symbol)}
               onRemove={() => onRemoveStock(s.id)}

@@ -6,10 +6,19 @@ import { CandlestickChart, BiasChart } from "@/shared/ui/organisms/candlestick-c
 import { Skeleton } from "@/shared/ui/atoms/skeleton";
 import { useStockChart } from "@/features/fetch-stock-chart/use-stock-chart";
 import { useIndicators } from "@/features/fetch-indicators/use-indicators";
-import { getStockPrices, type StockPrice } from "@taiwan-stock/api-client";
+import {
+  getStockPrices,
+  type StockPrice,
+  getDispositionFlags,
+  getEtfPremium,
+  type DispositionFlag,
+  type EtfPremium,
+} from "@taiwan-stock/api-client";
 import { formatPrice, formatPercent } from "@/shared/lib/format";
 import { useIsDesktop } from "@/shared/lib/use-media";
 import { StatBox } from "./atoms/StatBox";
+import { FundamentalsSection } from "./organisms/FundamentalsSection";
+import { DispositionNotice } from "./organisms/DispositionNotice";
 
 const PERIODS = [
   { key: "1d", label: "當日" },
@@ -41,6 +50,21 @@ const StockDetailPanel: React.FC<Props> = ({ symbol, variant = "page" }) => {
     staleTime: 1000 * 60 * 5,
   });
   const name = priceInfo?.[0]?.name;
+  const { data: flagsData } = useQuery<Record<string, DispositionFlag>>({
+    queryKey: ["disposition-flags", symbol],
+    queryFn: () => getDispositionFlags([symbol]),
+    staleTime: 1000 * 60 * 60,
+  });
+  const flag = flagsData?.[symbol];
+
+  const isEtf = symbol.startsWith("00");
+  const { data: premiumsData } = useQuery<Record<string, EtfPremium>>({
+    queryKey: ["etf-premiums", symbol],
+    queryFn: () => getEtfPremium([symbol]),
+    enabled: isEtf,
+    staleTime: 1000 * 60 * 60,
+  });
+  const premium = premiumsData?.[symbol];
 
   const isIntraday = period === "1d" || period === "3d";
   const latest = bars.at(-1);
@@ -87,6 +111,8 @@ const StockDetailPanel: React.FC<Props> = ({ symbol, variant = "page" }) => {
         )}
       </div>
 
+      {flag && <DispositionNotice flag={flag} />}
+
       {/* Stat bar */}
       <div className="grid grid-cols-2 @lg:grid-cols-4 gap-3 mb-5">
         <StatBox label="最新收盤" value={latest ? formatPrice(latest.close) : "—"} />
@@ -98,6 +124,16 @@ const StockDetailPanel: React.FC<Props> = ({ symbol, variant = "page" }) => {
         />
         <StatBox label="最高" value={dayHigh != null ? formatPrice(dayHigh) : "—"} />
         <StatBox label="最低" value={dayLow != null ? formatPrice(dayLow) : "—"} />
+        {premium && (
+          <>
+            <StatBox label="淨值" value={formatPrice(premium.nav)} sub={premium.date} />
+            <StatBox
+              label="折溢價"
+              value={`${premium.premium_pct >= 0 ? "+" : ""}${premium.premium_pct.toFixed(2)}%`}
+              valueClassName={premium.premium_pct >= 0 ? "text-gain" : "text-loss"}
+            />
+          </>
+        )}
       </div>
 
       {/* Period selector */}
@@ -144,6 +180,8 @@ const StockDetailPanel: React.FC<Props> = ({ symbol, variant = "page" }) => {
         </div>
         <BiasChart biasPoints={points} biasN={biasN} height={inline ? 140 : 160} />
       </div>
+
+      <FundamentalsSection symbol={symbol} />
     </div>
   );
 };

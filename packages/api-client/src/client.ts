@@ -163,6 +163,49 @@ export type SectorIndex = z.infer<typeof SectorIndexSchema>;
 export const getSectorIndices = (): Promise<SectorIndex[]> =>
   apiFetch(z.array(SectorIndexSchema), `${BASE}/market/sectors`);
 
+const ValuationSchema = z.object({
+  pe: z.number().nullable(),
+  pb: z.number().nullable(),
+  dividend_yield: z.number().nullable(),
+});
+export type Valuation = z.infer<typeof ValuationSchema>;
+const StockValuationSchema = ValuationSchema.extend({ symbol: z.string() });
+export type StockValuation = z.infer<typeof StockValuationSchema>;
+export const getValuations = (symbols: string[]): Promise<StockValuation[]> =>
+  apiFetch(z.array(StockValuationSchema), `${BASE}/fundamentals/valuations?symbols=${encodeURIComponent(symbols.join(","))}`);
+
+const DispositionFlagSchema = z.object({
+  level: z.enum(["disposal", "warning"]),
+  reason: z.string(),
+  measures: z.string().nullable(),
+  start: z.string().nullable(),
+  end: z.string().nullable(),
+});
+export type DispositionFlag = z.infer<typeof DispositionFlagSchema>;
+export const getDispositionFlags = (symbols: string[]): Promise<Record<string, DispositionFlag>> =>
+  apiFetch(z.record(z.string(), DispositionFlagSchema), `${BASE}/disposition/flags?symbols=${encodeURIComponent(symbols.join(","))}`);
+
+const EtfPremiumSchema = z.object({ nav: z.number(), premium_pct: z.number(), date: z.string() });
+export type EtfPremium = z.infer<typeof EtfPremiumSchema>;
+export const getEtfPremium = (symbols: string[]): Promise<Record<string, EtfPremium>> =>
+  apiFetch(z.record(z.string(), EtfPremiumSchema), `${BASE}/etf/premium?symbols=${encodeURIComponent(symbols.join(","))}`);
+
+const RevenuePointSchema = z.object({
+  year_month: z.string(),
+  revenue: z.number(),
+  mom_pct: z.number().nullable(),
+  yoy_pct: z.number().nullable(),
+  acc_yoy_pct: z.number().nullable(),
+});
+export type RevenuePoint = z.infer<typeof RevenuePointSchema>;
+const FundamentalsSchema = z.object({
+  valuation: ValuationSchema.nullable(),
+  revenue: z.array(RevenuePointSchema),
+});
+export type Fundamentals = z.infer<typeof FundamentalsSchema>;
+export const getFundamentals = (symbol: string): Promise<Fundamentals> =>
+  apiFetch(FundamentalsSchema, `${BASE}/fundamentals/${symbol}`);
+
 export const runBacktest = (req: BacktestRequest): Promise<BacktestResult> =>
   apiFetch(BacktestResultSchema, `${BASE}/backtest`, {
     method: "POST",

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { GripVertical, Tag, Check, X } from "lucide-react";
-import type { StockPrice } from "@taiwan-stock/api-client";
+import type { StockPrice, Valuation, DispositionFlag, EtfPremium } from "@taiwan-stock/api-client";
 import { ChangeLabel } from "../atoms/ChangeLabel";
+import { ROW_GRID } from "../row-grid";
 
 function fmtVolume(shares: number): string {
   if (shares === 0) return "—";
@@ -21,13 +22,16 @@ type DragProps = {
 type Props = {
   s: { id: number; symbol: string; name: string; note: string | null };
   price?: StockPrice;
+  valuation?: Valuation;
+  flag?: DispositionFlag;
+  premium?: EtfPremium;
   selected?: boolean;
   onClick: () => void;
   onRemove: () => void;
   onNoteChange: (note: string | null) => void;
 } & DragProps;
 
-export const StockRow: React.FC<Props> = ({ s, price, selected, onClick, onRemove, onNoteChange, onDragStart, onDragOver, onDrop, isDragOver }) => {
+export const StockRow: React.FC<Props> = ({ s, price, valuation, flag, premium, selected, onClick, onRemove, onNoteChange, onDragStart, onDragOver, onDrop, isDragOver }) => {
   const [editingNote, setEditingNote] = useState(false);
   const [noteVal, setNoteVal] = useState("");
 
@@ -52,13 +56,20 @@ export const StockRow: React.FC<Props> = ({ s, price, selected, onClick, onRemov
       className={`group transition-colors border-b border-transparent
         ${isDragOver ? "border-b-primary/50 bg-accent/20" : selected ? "bg-accent/40" : "hover:bg-muted/40"}`}
     >
-      <div className="grid items-center gap-3 px-4 @lg:px-5 py-2.5 @lg:py-2 grid-cols-[minmax(0,1fr)_72px_76px] @lg:grid-cols-[16px_1fr_72px_64px_80px_72px_40px]">
+      <div className={`grid items-center gap-3 px-4 @lg:px-5 py-2.5 @lg:py-2 ${ROW_GRID}`}>
         <GripVertical size={12} className="hidden @lg:block text-muted-foreground/30 cursor-grab shrink-0" />
         <button className="text-left min-w-0" onClick={onClick}>
           <span className="flex items-center gap-2 min-w-0">
             <span className="text-sm font-semibold tabular-nums shrink-0">{s.symbol}</span>
+            {flag && (
+              <span className={`text-[10px] font-medium px-1 py-px rounded-sm border shrink-0 ${
+                flag.level === "disposal" ? "border-violet-500/60 text-violet-400" : "border-amber-500/60 text-amber-400"
+              }`}>
+                {flag.level === "disposal" ? "處" : "注"}
+              </span>
+            )}
             {s.note && (
-              <span className="text-[11px] text-accent-foreground bg-accent px-1.5 py-0.5 rounded truncate">{s.note}</span>
+              <span className="text-[11px] text-sky-300 bg-sky-500/15 px-1.5 py-0.5 rounded truncate">{s.note}</span>
             )}
           </span>
           <span className="block text-xs text-muted-foreground truncate">{s.name}</span>
@@ -78,6 +89,16 @@ export const StockRow: React.FC<Props> = ({ s, price, selected, onClick, onRemov
         </span>
         <span className="hidden @lg:block text-right text-xs text-muted-foreground tabular-nums cursor-pointer" onClick={onClick}>
           {price ? fmtVolume(price.volume) : "—"}
+        </span>
+        <span className="hidden @3xl:block text-right text-xs text-muted-foreground tabular-nums cursor-pointer" onClick={onClick}>
+          {premium ? (
+            <span title="折溢價" className={premium.premium_pct >= 0 ? "text-gain" : "text-loss"}>
+              {premium.premium_pct >= 0 ? "+" : ""}{premium.premium_pct.toFixed(2)}%
+            </span>
+          ) : valuation?.pe != null ? valuation.pe.toFixed(1) : "—"}
+        </span>
+        <span className="hidden @3xl:block text-right text-xs text-muted-foreground tabular-nums cursor-pointer" onClick={onClick}>
+          {valuation?.dividend_yield != null ? `${valuation.dividend_yield.toFixed(1)}%` : "—"}
         </span>
         <div className="hidden @lg:flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100">
           <button onClick={openNote} className="text-muted-foreground hover:text-foreground transition-colors">

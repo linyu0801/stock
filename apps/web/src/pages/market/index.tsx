@@ -50,14 +50,14 @@ const MarketPage: React.FC = () => {
         <MoverTable data={data} />
       )}
 
+      <SectorStrip />
+
       <ConceptSection
         selected={concept}
         onSelect={(category) =>
           navigate({ to: "/", search: { concept: category }, replace: true })
         }
       />
-
-      <SectorStrip />
     </div>
   );
 };

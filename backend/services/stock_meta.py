@@ -46,8 +46,9 @@ def sync_stock_list() -> int:
         return 0
 
     with get_conn() as conn:
-        conn.executemany(
-            "INSERT OR REPLACE INTO stocks_meta (symbol, name) VALUES (?, ?)",
+        conn.cursor().executemany(
+            """INSERT INTO stocks_meta (symbol, name) VALUES (%s, %s)
+               ON CONFLICT (symbol) DO UPDATE SET name = excluded.name""",
             rows,
         )
     print(f"[stock_meta] saved {len(rows)} stocks total")
@@ -55,7 +56,7 @@ def sync_stock_list() -> int:
 
 def count_stocks() -> int:
     with get_conn() as conn:
-        return conn.execute("SELECT COUNT(*) FROM stocks_meta").fetchone()[0]
+        return conn.execute("SELECT COUNT(*) AS n FROM stocks_meta").fetchone()["n"]
 
 def search_stocks(q: str, limit: int = 10) -> list[dict]:
     q = q.strip()
@@ -65,13 +66,13 @@ def search_stocks(q: str, limit: int = 10) -> list[dict]:
         rows = conn.execute(
             """
             SELECT symbol, name FROM stocks_meta
-            WHERE symbol LIKE ? OR name LIKE ?
+            WHERE symbol LIKE %s OR name LIKE %s
             ORDER BY
-                CASE WHEN symbol = ? THEN 0
-                     WHEN symbol LIKE ? THEN 1
+                CASE WHEN symbol = %s THEN 0
+                     WHEN symbol LIKE %s THEN 1
                      ELSE 2 END,
                 symbol
-            LIMIT ?
+            LIMIT %s
             """,
             (f"{q}%", f"%{q}%", q, f"{q}%", limit),
         ).fetchall()

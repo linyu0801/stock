@@ -99,7 +99,7 @@ def get_stock_info(symbol: str) -> dict[str, Any] | None:
     latest, prev = bars[-1], bars[-2]
     change_pct = (latest["close"] - prev["close"]) / prev["close"] * 100
     with get_conn() as conn:
-        row = conn.execute("SELECT name FROM stocks_meta WHERE symbol = ?", (symbol,)).fetchone()
+        row = conn.execute("SELECT name FROM stocks_meta WHERE symbol = %s", (symbol,)).fetchone()
     name = row["name"] if row else symbol
     return {
         "symbol":     symbol,
@@ -111,7 +111,7 @@ def get_stock_info(symbol: str) -> dict[str, Any] | None:
 def _fetch_prices_from_yahoo(symbols: list[str]) -> list[dict[str, Any]]:
     with get_conn() as conn:
         rows = conn.execute(
-            f"SELECT symbol, name FROM stocks_meta WHERE symbol IN ({','.join('?'*len(symbols))})",
+            f"SELECT symbol, name FROM stocks_meta WHERE symbol IN ({','.join(['%s']*len(symbols))})",
             symbols,
         ).fetchall()
     name_map = {r["symbol"]: r["name"] for r in rows}

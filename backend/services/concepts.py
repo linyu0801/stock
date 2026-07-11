@@ -40,7 +40,8 @@ def get_concept_list() -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT category, name FROM concepts"
-            " WHERE updated_at > datetime('now', '-1 day') ORDER BY rowid"
+            " WHERE updated_at > to_char(now() AT TIME ZONE 'utc' - interval '1 day', 'YYYY-MM-DD HH24:MI:SS')"
+            " ORDER BY position"
         ).fetchall()
     if rows:
         result = [{"category": r["category"], "name": r["name"]} for r in rows]
@@ -61,9 +62,9 @@ def get_concept_list() -> list[dict]:
 
     with get_conn() as conn:
         conn.execute("DELETE FROM concepts")
-        conn.executemany(
-            "INSERT INTO concepts (category, name) VALUES (?, ?)",
-            [(c["name"], c["name"]) for c in categories],
+        conn.cursor().executemany(
+            "INSERT INTO concepts (category, name, position) VALUES (%s, %s, %s)",
+            [(c["name"], c["name"], i) for i, c in enumerate(categories)],
         )
 
     _concept_list_cache = (now, result)
@@ -143,10 +144,10 @@ def get_concept_stocks(category: str) -> list[dict]:
     try:
         result = _fetch_concept_stocks_from_yahoo(category)
         with get_conn() as conn:
-            conn.execute("DELETE FROM concept_stocks WHERE category = ?", (category,))
-            conn.executemany(
-                "INSERT INTO concept_stocks (category, symbol, name) VALUES (?, ?, ?)",
-                [(category, r["symbol"], r["name"]) for r in result],
+            conn.execute("DELETE FROM concept_stocks WHERE category = %s", (category,))
+            conn.cursor().executemany(
+                "INSERT INTO concept_stocks (category, symbol, name, position) VALUES (%s, %s, %s, %s)",
+                [(category, r["symbol"], r["name"], i) for i, r in enumerate(result)],
             )
         _concept_stocks_cache[category] = (now, result)
         return result
@@ -156,7 +157,7 @@ def get_concept_stocks(category: str) -> list[dict]:
     # Fall back to SQLite (no live prices — returns None for close/change_pct)
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT symbol, name FROM concept_stocks WHERE category = ? ORDER BY rowid",
+            "SELECT symbol, name FROM concept_stocks WHERE category = %s ORDER BY position",
             (category,),
         ).fetchall()
     return [

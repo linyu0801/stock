@@ -5,6 +5,8 @@ from db import get_conn
 
 TWSE_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap03_L"
 TPEx_URL = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes"
+# t187ap03_L 只有「公司」，上市 ETF 不在其中；用全證券日行情補齊代號與名稱
+TWSE_ALL_URL = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
 
 _SSL_CTX = ssl.create_default_context()
 _SSL_CTX.check_hostname = False
@@ -16,43 +18,61 @@ def _fetch_json(url: str) -> list:
         return json.loads(r.read())
 
 def sync_stock_list() -> int:
-    rows: list[tuple[str, str]] = []
+    # dict 去重：同批 executemany 對同一 key upsert 兩次會被 PG 拒絕；
+    # 先鋪全證券（含 ETF），公司來源的簡稱後蓋（較乾淨）
+    merged: dict[str, str] = {}
+
+    try:
+        data = _fetch_json(TWSE_ALL_URL)
+        n = 0
+        for item in data:
+            symbol = str(item.get("Code", "")).strip()
+            name = str(item.get("Name", "")).strip()
+            if symbol and name:
+                merged[symbol] = name
+                n += 1
+        print(f"[stock_meta] TWSE all-securities: {n}")
+    except Exception as e:
+        print(f"[stock_meta] TWSE all-securities fetch failed: {e}")
 
     try:
         data = _fetch_json(TWSE_URL)
+        n = 0
         for item in data:
             symbol = str(item.get("公司代號", "")).strip()
             name = str(item.get("公司簡稱", "")).strip()
             if symbol and name:
-                rows.append((symbol, name))
-        print(f"[stock_meta] TWSE: {len(rows)} stocks")
+                merged[symbol] = name
+                n += 1
+        print(f"[stock_meta] TWSE companies: {n}")
     except Exception as e:
         print(f"[stock_meta] TWSE fetch failed: {e}")
 
-    tpex_before = len(rows)
     try:
         data = _fetch_json(TPEx_URL)
+        n = 0
         for item in data:
             symbol = str(item.get("SecuritiesCompanyCode", "")).strip()
             name = str(item.get("CompanyName", "")).strip()
             if symbol and name:
-                rows.append((symbol, name))
-        print(f"[stock_meta] TPEx: {len(rows) - tpex_before} stocks")
+                merged[symbol] = name
+                n += 1
+        print(f"[stock_meta] TPEx: {n}")
     except Exception as e:
         print(f"[stock_meta] TPEx fetch failed: {e}")
 
-    if not rows:
-        print("[stock_meta] sync failed: no data from either source")
+    if not merged:
+        print("[stock_meta] sync failed: no data from any source")
         return 0
 
     with get_conn() as conn:
         conn.cursor().executemany(
             """INSERT INTO stocks_meta (symbol, name) VALUES (%s, %s)
                ON CONFLICT (symbol) DO UPDATE SET name = excluded.name""",
-            rows,
+            list(merged.items()),
         )
-    print(f"[stock_meta] saved {len(rows)} stocks total")
-    return len(rows)
+    print(f"[stock_meta] saved {len(merged)} securities total")
+    return len(merged)
 
 def count_stocks() -> int:
     with get_conn() as conn:

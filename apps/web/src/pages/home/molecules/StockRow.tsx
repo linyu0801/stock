@@ -3,14 +3,7 @@ import { GripVertical, Tag, Check, X } from "lucide-react";
 import type { StockPrice, Valuation, DispositionFlag, EtfPremium } from "@taiwan-stock/api-client";
 import { ChangeLabel } from "../atoms/ChangeLabel";
 import { ROW_GRID } from "../row-grid";
-
-function fmtVolume(shares: number): string {
-  if (shares === 0) return "—";
-  const lots = Math.round(shares / 1000);
-  if (lots >= 10000) return `${(lots / 10000).toFixed(1)}萬`;
-  if (lots >= 1000)  return `${(lots / 1000).toFixed(1)}K`;
-  return String(lots);
-}
+import { formatVolume } from "@/shared/lib/format";
 
 type DragProps = {
   onDragStart: (e: React.DragEvent) => void;
@@ -88,7 +81,7 @@ export const StockRow: React.FC<Props> = ({ s, price, valuation, flag, premium, 
           {price ? <ChangeLabel value={price.change_pct} /> : <span className="text-muted-foreground">—</span>}
         </span>
         <span className="hidden @lg:block text-right text-xs text-muted-foreground tabular-nums cursor-pointer" onClick={onClick}>
-          {price ? fmtVolume(price.volume) : "—"}
+          {price ? formatVolume(price.volume) : "—"}
         </span>
         <span className="hidden @3xl:block text-right text-xs text-muted-foreground tabular-nums cursor-pointer" onClick={onClick}>
           {premium ? (

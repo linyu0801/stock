@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { searchStocks } from "@taiwan-stock/api-client";
 
-interface Props {
+type Props = {
   onSelect: (symbol: string) => void;
   placeholder?: string;
-}
+};
 
-export function StockSearchCombobox({ onSelect, placeholder = "輸入股票代碼或名稱…" }: Props) {
+export const StockSearchCombobox: React.FC<Props> = ({ onSelect, placeholder = "輸入股票代碼或名稱…" }) => {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ symbol: string; name: string }[]>([]);
   const [open, setOpen] = useState(false);
@@ -87,4 +87,4 @@ export function StockSearchCombobox({ onSelect, placeholder = "輸入股票代�
       )}
     </div>
   );
-}
+};

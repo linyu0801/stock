@@ -14,7 +14,7 @@ const NAV_ITEMS = [
   { to: "/backtest",  label: "回測",  icon: "chart" },
 ] as const;
 
-function NavIcon({ type, active }: { type: string; active: boolean }) {
+const NavIcon: React.FC<{ type: string; active: boolean }> = ({ type, active }) => {
   const cls = `transition-colors ${active ? "text-accent-foreground" : "text-muted-foreground"}`;
   if (type === "home") return (
     <svg aria-hidden="true" className={cls} width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
@@ -31,9 +31,9 @@ function NavIcon({ type, active }: { type: string; active: boolean }) {
       <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
-}
+};
 
-function SideNav() {
+const SideNav: React.FC = () => {
   const { location: { pathname: path } } = useRouterState();
 
   return (
@@ -64,9 +64,9 @@ function SideNav() {
       </div>
     </aside>
   );
-}
+};
 
-function TopNav() {
+const TopNav: React.FC = () => {
   const { location: { pathname: path } } = useRouterState();
 
   return (
@@ -96,7 +96,7 @@ function TopNav() {
       </div>
     </header>
   );
-}
+};
 
 const rootRoute = createRootRoute({
   component: () => (

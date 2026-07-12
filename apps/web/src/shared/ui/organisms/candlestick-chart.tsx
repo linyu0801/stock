@@ -25,12 +25,12 @@ function calcMA(bars: OHLCVBar[], n: number): LineData[] {
   });
 }
 
-interface CandlestickChartProps {
+type CandlestickChartProps = {
   bars: OHLCVBar[];
   height?: number;
-}
+};
 
-export function CandlestickChart({ bars, height = 480 }: CandlestickChartProps) {
+export const CandlestickChart: React.FC<CandlestickChartProps> = ({ bars, height = 480 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
 
@@ -100,15 +100,15 @@ export function CandlestickChart({ bars, height = 480 }: CandlestickChartProps) 
       </div>
     </div>
   );
-}
+};
 
-interface BiasChartProps {
+type BiasChartProps = {
   biasPoints: IndicatorPoint[];
   biasN: number;
   height?: number;
-}
+};
 
-export function BiasChart({ biasPoints, biasN, height = 160 }: BiasChartProps) {
+export const BiasChart: React.FC<BiasChartProps> = ({ biasPoints, biasN, height = 160 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
 
@@ -148,4 +148,4 @@ export function BiasChart({ biasPoints, biasN, height = 160 }: BiasChartProps) {
       <div ref={containerRef} className="w-full" style={{ height }} />
     </div>
   );
-}
+};

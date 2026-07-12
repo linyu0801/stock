@@ -29,3 +29,5 @@ Thumbs.db
 .claude/skills/
 .env.local
 docs/superpowers/
+claude-review-*.md
+_backup-*

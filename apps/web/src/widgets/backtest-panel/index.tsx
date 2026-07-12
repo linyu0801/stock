@@ -7,7 +7,7 @@ import { StatCard } from "@/shared/ui/molecules/stat-card";
 import { Skeleton } from "@/shared/ui/atoms/skeleton";
 import { formatPercent } from "@/shared/lib/format";
 
-export function BacktestPanel() {
+export const BacktestPanel: React.FC = () => {
   const { result, loading, error, execute } = useBacktest();
   const [form, setForm] = useState({
     symbol: "2330",
@@ -99,7 +99,7 @@ export function BacktestPanel() {
                     <td className="py-1 text-right font-mono">{t.buy_price.toFixed(2)}</td>
                     <td className="py-1">{t.sell_time}</td>
                     <td className="py-1 text-right font-mono">{t.sell_price.toFixed(2)}</td>
-                    <td className={`py-1 text-right ${t.return_pct >= 0 ? "text-red-500" : "text-green-500"}`}>
+                    <td className={`py-1 text-right ${t.return_pct >= 0 ? "text-gain" : "text-loss"}`}>
                       {formatPercent(t.return_pct)}
                     </td>
                   </tr>
@@ -111,4 +111,4 @@ export function BacktestPanel() {
       )}
     </div>
   );
-}
+};

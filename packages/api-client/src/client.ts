@@ -9,8 +9,18 @@ import { BacktestRequest, BacktestResult, BacktestResultSchema } from "./schemas
 
 const BASE = "http://localhost:8000/api";
 
+let authTokenProvider: (() => Promise<string | null>) | null = null;
+export const setAuthTokenProvider = (fn: () => Promise<string | null>) => {
+  authTokenProvider = fn;
+};
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = authTokenProvider ? await authTokenProvider() : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function apiFetch<T>(schema: z.ZodType<T>, url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+  const res = await fetch(url, { ...init, headers: { ...(init?.headers ?? {}), ...(await authHeaders()) } });
   if (!res.ok) throw new Error(`API error ${res.status}: ${url}`);
   return schema.parse(await res.json());
 }
@@ -50,7 +60,7 @@ export const renameGroup = (groupId: number, name: string) =>
   });
 
 export const deleteGroup = async (groupId: number): Promise<void> => {
-  const res = await fetch(`${BASE}/watchlist/groups/${groupId}`, { method: "DELETE" });
+  const res = await fetch(`${BASE}/watchlist/groups/${groupId}`, { method: "DELETE", headers: await authHeaders() });
   if (!res.ok) throw new Error(`API error ${res.status}`);
 };
 
@@ -71,7 +81,7 @@ export const batchAddStocks = (stocks: BatchAddItem[]) =>
     });
 
 export const removeStock = async (stockId: number): Promise<void> => {
-  const res = await fetch(`${BASE}/watchlist/stocks/${stockId}`, { method: "DELETE" });
+  const res = await fetch(`${BASE}/watchlist/stocks/${stockId}`, { method: "DELETE", headers: await authHeaders() });
   if (!res.ok) throw new Error(`API error ${res.status}`);
 };
 
@@ -108,7 +118,7 @@ export const updateSublabel = (sublabelId: number, label: string) =>
     });
 
 export const deleteSublabel = async (sublabelId: number): Promise<void> => {
-  const res = await fetch(`${BASE}/watchlist/sublabels/${sublabelId}`, { method: "DELETE" });
+  const res = await fetch(`${BASE}/watchlist/sublabels/${sublabelId}`, { method: "DELETE", headers: await authHeaders() });
   if (!res.ok) throw new Error(`API error ${res.status}`);
 };
 

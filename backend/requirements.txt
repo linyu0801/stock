@@ -4,3 +4,4 @@ psycopg[binary]
 psycopg-pool
 python-dotenv
 pandas
+PyJWT[crypto]

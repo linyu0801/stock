@@ -32,9 +32,12 @@ def init_db() -> None:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS groups (
                 id      INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                name    TEXT    NOT NULL UNIQUE,
-                "order" INTEGER NOT NULL DEFAULT 0
+                name    TEXT    NOT NULL,
+                "order" INTEGER NOT NULL DEFAULT 0,
+                user_id UUID,
+                UNIQUE(user_id, name)
             );
+            CREATE INDEX IF NOT EXISTS groups_user_id_idx ON groups(user_id);
             CREATE TABLE IF NOT EXISTS stocks (
                 id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
                 symbol     TEXT    NOT NULL,

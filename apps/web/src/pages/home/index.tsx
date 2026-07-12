@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { Plus } from 'lucide-react';
+import { Plus, LogOut } from 'lucide-react';
 import { useGroups } from '@/features/manage-groups/use-groups';
 import {
   getStockPrices,
@@ -16,12 +16,18 @@ import {
   type EtfPremium,
 } from '@taiwan-stock/api-client';
 import { useMediaQuery } from '@/shared/lib/use-media';
+import { useSession } from '@/shared/lib/use-session';
+import { supabase } from '@/shared/lib/supabase';
+import type { Session } from '@supabase/supabase-js';
 import StockDetailPanel from '@/widgets/stock-detail';
 import { GroupTab } from './molecules/GroupTab';
 import { NewGroupInput } from './molecules/NewGroupInput';
+import { LoginCard } from './molecules/LoginCard';
 import { GroupPanel } from './organisms/GroupPanel';
 
-const HomePage: React.FC = () => {
+type WatchlistViewProps = { session: Session };
+
+const WatchlistView: React.FC<WatchlistViewProps> = ({ session }) => {
   const {
     groups,
     createGroup,
@@ -148,13 +154,22 @@ const HomePage: React.FC = () => {
       <div className="shrink-0 border-b md:border-b-0 md:border-r border-border md:w-60 xl:w-52 flex flex-col">
         <div className="px-4 py-3 md:py-4 md:border-b border-border shrink-0 flex items-center justify-between">
           <span className="font-display font-bold text-[15px]">自選股</span>
-          <button
-            onClick={() => setAddingNew(true)}
-            aria-label="新增分組"
-            className="w-7 h-7 flex items-center justify-center rounded cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-          >
-            <Plus size={15} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setAddingNew(true)}
+              aria-label="新增分組"
+              className="w-7 h-7 flex items-center justify-center rounded cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            >
+              <Plus size={15} />
+            </button>
+            <button
+              onClick={() => supabase.auth.signOut()}
+              aria-label="登出"
+              className="md:hidden w-7 h-7 flex items-center justify-center rounded cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            >
+              <LogOut size={14} />
+            </button>
+          </div>
         </div>
 
         <div className="flex md:flex-col md:flex-1 gap-1 md:gap-0.5 md:space-y-0 overflow-x-auto md:overflow-x-visible md:overflow-y-auto px-2 pb-2 md:p-2 [scrollbar-width:none]">
@@ -201,6 +216,22 @@ const HomePage: React.FC = () => {
             </div>
           ))}
         </div>
+
+        <div className="hidden md:block shrink-0 border-t border-border p-2">
+          <button
+            onClick={() => supabase.auth.signOut()}
+            title="登出"
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-muted/50 transition-colors group/user"
+          >
+            {session.user.user_metadata?.avatar_url && (
+              <img src={session.user.user_metadata.avatar_url} alt="" className="w-5 h-5 rounded-full shrink-0" />
+            )}
+            <span className="text-xs text-muted-foreground truncate flex-1 text-left">
+              {session.user.email}
+            </span>
+            <LogOut size={12} className="shrink-0 text-muted-foreground opacity-0 group-hover/user:opacity-100 transition-opacity" />
+          </button>
+        </div>
       </div>
 
       {activeGroup ? (
@@ -245,6 +276,13 @@ const HomePage: React.FC = () => {
       )}
     </div>
   );
+};
+
+const HomePage: React.FC = () => {
+  const { session, loading } = useSession();
+  if (loading) return null;
+  if (!session) return <LoginCard />;
+  return <WatchlistView session={session} />;
 };
 
 export default HomePage;

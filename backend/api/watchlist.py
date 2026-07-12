@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
 from db import get_conn
+from auth import get_current_user
 
 router = APIRouter(prefix="/api/watchlist")
 
@@ -42,11 +43,22 @@ class ReorderBody(BaseModel):
     items: list[ReorderItem]
 
 
+def _require_group(conn, group_id: int, user_id: str) -> None:
+    if conn.execute(
+        "SELECT 1 FROM groups WHERE id = %s AND user_id = %s", (group_id, user_id)
+    ).fetchone() is None:
+        raise HTTPException(404, "group not found")
+
+
+_OWNED = "group_id IN (SELECT id FROM groups WHERE user_id = %s)"
+
+
 @router.get("")
-def get_watchlist():
+def get_watchlist(user_id: str = Depends(get_current_user)):
     with get_conn() as conn:
         groups = conn.execute(
-            'SELECT id, name, "order" FROM groups ORDER BY "order", id'
+            'SELECT id, name, "order" FROM groups WHERE user_id = %s ORDER BY "order", id',
+            (user_id,),
         ).fetchall()
         result = []
         for g in groups:
@@ -79,12 +91,12 @@ def get_watchlist():
 
 
 @router.post("/groups", status_code=201)
-def create_group(body: GroupCreate):
+def create_group(body: GroupCreate, user_id: str = Depends(get_current_user)):
     with get_conn() as conn:
         try:
             cur = conn.execute(
-                'INSERT INTO groups (name, "order") VALUES (%s, (SELECT COALESCE(MAX("order"),0)+1 FROM groups)) RETURNING id',
-                (body.name,),
+                'INSERT INTO groups (name, "order", user_id) VALUES (%s, (SELECT COALESCE(MAX("order"),0)+1 FROM groups WHERE user_id = %s), %s) RETURNING id',
+                (body.name, user_id, user_id),
             )
             return {"id": cur.fetchone()["id"], "name": body.name}
         except Exception:
@@ -92,77 +104,107 @@ def create_group(body: GroupCreate):
 
 
 @router.patch("/groups/{group_id}")
-def rename_group(group_id: int, body: GroupRename):
+def rename_group(group_id: int, body: GroupRename, user_id: str = Depends(get_current_user)):
     with get_conn() as conn:
-        conn.execute("UPDATE groups SET name = %s WHERE id = %s", (body.name, group_id))
+        cur = conn.execute(
+            "UPDATE groups SET name = %s WHERE id = %s AND user_id = %s",
+            (body.name, group_id, user_id),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(404, "group not found")
         return {"id": group_id, "name": body.name}
 
 
 @router.delete("/groups/{group_id}", status_code=204)
-def delete_group(group_id: int):
+def delete_group(group_id: int, user_id: str = Depends(get_current_user)):
     with get_conn() as conn:
-        conn.execute("DELETE FROM groups WHERE id = %s", (group_id,))
+        cur = conn.execute("DELETE FROM groups WHERE id = %s AND user_id = %s", (group_id, user_id))
+        if cur.rowcount == 0:
+            raise HTTPException(404, "group not found")
 
 
 @router.post("/stocks", status_code=201)
-def add_stock(body: StockAdd):
+def add_stock(body: StockAdd, user_id: str = Depends(get_current_user)):
     with get_conn() as conn:
+        _require_group(conn, body.group_id, user_id)
         try:
             cur = conn.execute(
                 "INSERT INTO stocks (symbol, group_id, sort_order) VALUES (%s, %s, (SELECT COALESCE(MAX(sort_order),0)+1 FROM stocks WHERE group_id=%s)) RETURNING id",
                 (body.symbol, body.group_id, body.group_id),
             )
             return {"id": cur.fetchone()["id"], "symbol": body.symbol, "group_id": body.group_id}
+        except HTTPException:
+            raise
         except Exception:
             raise HTTPException(409, f"Stock '{body.symbol}' already in group")
 
 
 @router.post("/stocks/batch", status_code=201)
-def batch_add_stocks(body: StockBatch):
+def batch_add_stocks(body: StockBatch, user_id: str = Depends(get_current_user)):
     added = []
     with get_conn() as conn:
         for item in body.stocks:
-            row = conn.execute("SELECT id FROM groups WHERE name = %s", (item.group,)).fetchone()
+            row = conn.execute(
+                "SELECT id FROM groups WHERE name = %s AND user_id = %s", (item.group, user_id)
+            ).fetchone()
             if row is None:
                 cur = conn.execute(
-                    'INSERT INTO groups (name, "order") VALUES (%s, (SELECT COALESCE(MAX("order"),0)+1 FROM groups)) RETURNING id',
-                    (item.group,),
+                    'INSERT INTO groups (name, "order", user_id) VALUES (%s, (SELECT COALESCE(MAX("order"),0)+1 FROM groups WHERE user_id = %s), %s) RETURNING id',
+                    (item.group, user_id, user_id),
                 )
                 group_id = cur.fetchone()["id"]
             else:
                 group_id = row["id"]
-            try:
-                cur = conn.execute(
-                    "INSERT INTO stocks (symbol, group_id, sort_order) VALUES (%s, %s, (SELECT COALESCE(MAX(sort_order),0)+1 FROM stocks WHERE group_id=%s)) RETURNING id",
-                    (item.symbol, group_id, group_id),
-                )
-                added.append({"id": cur.fetchone()["id"], "symbol": item.symbol, "group_id": group_id})
-            except Exception:
-                pass
+            # PG 交易內失敗的 INSERT 會 abort 整個交易（SQLite 不會），不能用 try/except pass 續跑
+            cur = conn.execute(
+                "INSERT INTO stocks (symbol, group_id, sort_order) VALUES (%s, %s, (SELECT COALESCE(MAX(sort_order),0)+1 FROM stocks WHERE group_id=%s)) ON CONFLICT DO NOTHING RETURNING id",
+                (item.symbol, group_id, group_id),
+            )
+            row2 = cur.fetchone()
+            if row2 is not None:
+                added.append({"id": row2["id"], "symbol": item.symbol, "group_id": group_id})
     return {"added": added}
 
 
 @router.delete("/stocks/{stock_id}", status_code=204)
-def remove_stock(stock_id: int):
+def remove_stock(stock_id: int, user_id: str = Depends(get_current_user)):
     with get_conn() as conn:
-        conn.execute("DELETE FROM stocks WHERE id = %s", (stock_id,))
+        cur = conn.execute(f"DELETE FROM stocks WHERE id = %s AND {_OWNED}", (stock_id, user_id))
+        if cur.rowcount == 0:
+            raise HTTPException(404, "stock not found")
 
 
 @router.patch("/stocks/{stock_id}")
-def update_stock(stock_id: int, body: StockUpdate):
+def update_stock(stock_id: int, body: StockUpdate, user_id: str = Depends(get_current_user)):
     with get_conn() as conn:
         if body.group_id is not None:
-            conn.execute("UPDATE stocks SET group_id = %s WHERE id = %s", (body.group_id, stock_id))
+            _require_group(conn, body.group_id, user_id)
+            cur = conn.execute(
+                f"UPDATE stocks SET group_id = %s WHERE id = %s AND {_OWNED}",
+                (body.group_id, stock_id, user_id),
+            )
+            if cur.rowcount == 0:
+                raise HTTPException(404, "stock not found")
         if body.note is not None:
-            conn.execute("UPDATE stocks SET note = %s WHERE id = %s", (body.note, stock_id))
-        row = conn.execute("SELECT id, group_id, note FROM stocks WHERE id = %s", (stock_id,)).fetchone()
+            cur = conn.execute(
+                f"UPDATE stocks SET note = %s WHERE id = %s AND {_OWNED}",
+                (body.note, stock_id, user_id),
+            )
+            if cur.rowcount == 0:
+                raise HTTPException(404, "stock not found")
+        row = conn.execute(
+            f"SELECT id, group_id, note FROM stocks WHERE id = %s AND {_OWNED}",
+            (stock_id, user_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "stock not found")
         return dict(row)
 
 
 @router.post("/sublabels", status_code=201)
-def create_sublabel(body: SublabelCreate):
+def create_sublabel(body: SublabelCreate, user_id: str = Depends(get_current_user)):
     with get_conn() as conn:
-        # place at end of group items
+        _require_group(conn, body.group_id, user_id)
         max_order = conn.execute(
             "SELECT MAX(sort_order) as m FROM ("
             "  SELECT sort_order FROM stocks WHERE group_id=%s"
@@ -178,21 +220,29 @@ def create_sublabel(body: SublabelCreate):
 
 
 @router.patch("/sublabels/{sublabel_id}")
-def update_sublabel(sublabel_id: int, body: SublabelUpdate):
+def update_sublabel(sublabel_id: int, body: SublabelUpdate, user_id: str = Depends(get_current_user)):
     with get_conn() as conn:
-        conn.execute("UPDATE sublabels SET label = %s WHERE id = %s", (body.label, sublabel_id))
+        cur = conn.execute(
+            f"UPDATE sublabels SET label = %s WHERE id = %s AND {_OWNED}",
+            (body.label, sublabel_id, user_id),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(404, "sublabel not found")
         return {"id": sublabel_id, "label": body.label}
 
 
 @router.delete("/sublabels/{sublabel_id}", status_code=204)
-def delete_sublabel(sublabel_id: int):
+def delete_sublabel(sublabel_id: int, user_id: str = Depends(get_current_user)):
     with get_conn() as conn:
-        conn.execute("DELETE FROM sublabels WHERE id = %s", (sublabel_id,))
+        cur = conn.execute(f"DELETE FROM sublabels WHERE id = %s AND {_OWNED}", (sublabel_id, user_id))
+        if cur.rowcount == 0:
+            raise HTTPException(404, "sublabel not found")
 
 
 @router.post("/reorder")
-def reorder_items(body: ReorderBody):
+def reorder_items(body: ReorderBody, user_id: str = Depends(get_current_user)):
     with get_conn() as conn:
+        _require_group(conn, body.group_id, user_id)
         for i, item in enumerate(body.items):
             if item.type == "stock":
                 conn.execute("UPDATE stocks SET sort_order = %s WHERE id = %s AND group_id = %s",

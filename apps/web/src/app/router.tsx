@@ -1,6 +1,7 @@
 import { createRouter, createRoute, createRootRoute, Outlet, Link, useRouterState } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 import { ThemeToggle } from "@/shared/ui/atoms/theme-toggle";
+import { UserMenu } from "@/shared/ui/organisms/user-menu";
 
 const MarketPage    = lazy(() => import("@/pages/market"));
 const WatchlistPage = lazy(() => import("@/pages/home"));
@@ -57,8 +58,9 @@ function SideNav() {
           </Link>
         );
       })}
-      <div className="mt-auto">
+      <div className="mt-auto flex flex-col items-center gap-3">
         <ThemeToggle />
+        <UserMenu />
       </div>
     </aside>
   );
@@ -88,8 +90,9 @@ function TopNav() {
           </Link>
         );
       })}
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-2">
         <ThemeToggle />
+        <UserMenu placement="top" />
       </div>
     </header>
   );

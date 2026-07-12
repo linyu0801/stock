@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { Plus, LogOut } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useGroups } from '@/features/manage-groups/use-groups';
 import {
   getStockPrices,
@@ -17,17 +17,13 @@ import {
 } from '@taiwan-stock/api-client';
 import { useMediaQuery } from '@/shared/lib/use-media';
 import { useSession } from '@/shared/lib/use-session';
-import { supabase } from '@/shared/lib/supabase';
-import type { Session } from '@supabase/supabase-js';
 import StockDetailPanel from '@/widgets/stock-detail';
 import { GroupTab } from './molecules/GroupTab';
 import { NewGroupInput } from './molecules/NewGroupInput';
 import { LoginCard } from './molecules/LoginCard';
 import { GroupPanel } from './organisms/GroupPanel';
 
-type WatchlistViewProps = { session: Session };
-
-const WatchlistView: React.FC<WatchlistViewProps> = ({ session }) => {
+const WatchlistView: React.FC = () => {
   const {
     groups,
     createGroup,
@@ -162,13 +158,6 @@ const WatchlistView: React.FC<WatchlistViewProps> = ({ session }) => {
             >
               <Plus size={15} />
             </button>
-            <button
-              onClick={() => supabase.auth.signOut()}
-              aria-label="登出"
-              className="md:hidden w-7 h-7 flex items-center justify-center rounded cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-            >
-              <LogOut size={14} />
-            </button>
           </div>
         </div>
 
@@ -217,21 +206,6 @@ const WatchlistView: React.FC<WatchlistViewProps> = ({ session }) => {
           ))}
         </div>
 
-        <div className="hidden md:block shrink-0 border-t border-border p-2">
-          <button
-            onClick={() => supabase.auth.signOut()}
-            title="登出"
-            className="w-full flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-muted/50 transition-colors group/user"
-          >
-            {session.user.user_metadata?.avatar_url && (
-              <img src={session.user.user_metadata.avatar_url} alt="" className="w-5 h-5 rounded-full shrink-0" />
-            )}
-            <span className="text-xs text-muted-foreground truncate flex-1 text-left">
-              {session.user.email}
-            </span>
-            <LogOut size={12} className="shrink-0 text-muted-foreground opacity-0 group-hover/user:opacity-100 transition-opacity" />
-          </button>
-        </div>
       </div>
 
       {activeGroup ? (
@@ -282,7 +256,7 @@ const HomePage: React.FC = () => {
   const { session, loading } = useSession();
   if (loading) return null;
   if (!session) return <LoginCard />;
-  return <WatchlistView session={session} />;
+  return <WatchlistView />;
 };
 
 export default HomePage;

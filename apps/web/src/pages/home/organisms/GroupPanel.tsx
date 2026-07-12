@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import type { Group, StockPrice, Valuation, ReorderItem, DispositionFlag, EtfPremium } from "@taiwan-stock/api-client";
 import { StockSearchCombobox } from "@/shared/ui/molecules/stock-search-combobox";
 import { StockRow } from "../molecules/StockRow";
@@ -16,7 +16,7 @@ type Props = {
   selectedSymbol?: string;
   onStockClick: (symbol: string) => void;
   onRemoveStock: (id: number) => void;
-  onAddStock: (symbol: string) => void;
+  onAddStock: (symbol: string) => Promise<unknown>;
   onNoteChange: (stockId: number, note: string | null) => void;
   onCreateSublabel: (label: string) => void;
   onRenameSublabel: (id: number, label: string) => void;
@@ -32,6 +32,7 @@ export const GroupPanel: React.FC<Props> = ({
   onCreateSublabel, onRenameSublabel, onDeleteSublabel, onReorder,
 }) => {
   const [showModal, setShowModal] = useState(false);
+  const [pendingSymbol, setPendingSymbol] = useState<string | null>(null);
   const [localItems, setLocalItems] = useState<LocalItem[]>([]);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const dragSrc = useRef<string | null>(null);
@@ -63,6 +64,15 @@ export const GroupPanel: React.FC<Props> = ({
 
   const itemMap = Object.fromEntries(group.items.map(i => [`${i._type}-${i.id}`, i]));
   const stockMap = Object.fromEntries(group.stocks.map(s => [s.id, s]));
+
+  const handleAdd = async (symbol: string) => {
+    setPendingSymbol(symbol);
+    try {
+      await onAddStock(symbol);
+    } finally {
+      setPendingSymbol(null);
+    }
+  };
 
   return (
     <div className="@container flex-1 flex flex-col h-full overflow-hidden relative">
@@ -150,10 +160,17 @@ export const GroupPanel: React.FC<Props> = ({
             />
           );
         })}
+        {pendingSymbol && (
+          <div className="flex items-center gap-2 px-4 @lg:px-5 py-2.5">
+            <Loader2 size={13} className="animate-spin text-muted-foreground shrink-0" />
+            <span className="text-sm font-semibold tabular-nums">{pendingSymbol}</span>
+            <span className="text-xs text-muted-foreground">加入中…</span>
+          </div>
+        )}
       </div>
 
       <div className="px-4 py-3 border-t border-border shrink-0">
-        <StockSearchCombobox placeholder="搜尋股票加入…" onSelect={onAddStock} />
+        <StockSearchCombobox placeholder="搜尋股票加入…" onSelect={handleAdd} />
       </div>
 
       {showModal && (

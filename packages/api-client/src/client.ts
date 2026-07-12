@@ -7,7 +7,7 @@ import {
 import { GroupSchema, Group, BatchAddItem } from "./schemas/watchlist";
 import { BacktestRequest, BacktestResult, BacktestResultSchema } from "./schemas/backtest";
 
-const BASE = "http://localhost:8000/api";
+const BASE = `${import.meta.env.VITE_API_BASE ?? "http://localhost:8000"}/api`;
 
 let authTokenProvider: (() => Promise<string | null>) | null = null;
 export const setAuthTokenProvider = (fn: () => Promise<string | null>) => {

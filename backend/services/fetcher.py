@@ -90,6 +90,11 @@ def download_history(symbol: str, period: str) -> list[dict[str, Any]]:
         keep = set(last_dates)
         bars = [b for b in bars if datetime.utcfromtimestamp(b["time"]).date() in keep]
 
+    # 休市日 Yahoo 會多一根複製前日收盤的幽靈日 K（量 0、價與前日相同），砍尾避免漲跌被算成 0
+    if not intraday:
+        while len(bars) >= 2 and bars[-1]["volume"] == 0 and bars[-1]["close"] == bars[-2]["close"]:
+            bars.pop()
+
     return bars
 
 def get_stock_info(symbol: str) -> dict[str, Any] | None:

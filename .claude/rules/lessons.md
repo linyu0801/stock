@@ -43,3 +43,9 @@
 - 錯路：寫死單一分隔符／單一日期格式
 - 正解：多分隔符 fallback（"至"、"～"、"~"）＋以位數區分民國(7)/西元(8)，解析失敗記 log 不靜默；TWSE notice 無資料時回一筆全空白 placeholder 要濾掉。實作在 `services/disposition.py`
 - 制度修正：無
+
+## 2026-07-12 Yahoo v8 在休市日多吐一根幽靈日 K（量 0、收盤複製前日）
+- 症狀：週末/休市日看盤，大部分股票漲跌顯示 0
+- 錯路：以為是休市沒資料；其實是多了一根假 bar，最後兩根相減變 0
+- 正解：日 K 尾端 `volume == 0 且 close == 前一根 close` 的 bar 砍掉（兩條件都要，避免誤砍真平盤）；已修在 `services/fetcher.py` 的 `download_history`
+- 制度修正：無

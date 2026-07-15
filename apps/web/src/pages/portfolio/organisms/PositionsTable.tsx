@@ -1,0 +1,160 @@
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getPortfolioPositions, setLeverage, clearLeverage, type Position } from "@taiwan-stock/api-client";
+import { formatPrice, formatPercent, gainLossClass } from "@/shared/lib/format";
+import { Skeleton } from "@/shared/ui/atoms/skeleton";
+import { Button } from "@/shared/ui/atoms/button";
+import { Input } from "@/shared/ui/atoms/input";
+
+const fmt = (n: number | null) => (n == null ? "—" : formatPrice(n));
+
+const unrealizedPctOf = (p: Position): number | null => {
+  const cost = p.avg_cost * p.quantity;
+  return p.unrealized != null && cost !== 0 ? (p.unrealized / cost) * 100 : null;
+};
+
+export const PositionsTable: React.FC = () => {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["portfolio", "positions"],
+    queryFn: getPortfolioPositions,
+  });
+  const [editingSymbol, setEditingSymbol] = useState<string | null>(null);
+  const [factorInput, setFactorInput] = useState("");
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["portfolio"] });
+
+  const confirmFactor = async (symbol: string) => {
+    const value = Number(factorInput);
+    if (!Number.isNaN(value)) {
+      await setLeverage(symbol, value);
+      invalidate();
+    }
+    setEditingSymbol(null);
+  };
+
+  const restoreFactor = async (symbol: string) => {
+    await clearLeverage(symbol);
+    invalidate();
+  };
+
+  if (isLoading || !data) {
+    return <Skeleton className="h-40" />;
+  }
+
+  if (data.positions.length === 0) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-6 text-sm text-muted-foreground text-center">
+        尚無投資部位，先在下方新增交易
+      </div>
+    );
+  }
+
+  const factorCell = (p: Position) =>
+    editingSymbol === p.symbol ? (
+      <div className="flex items-center justify-end gap-1">
+        <Input
+          type="number"
+          step="0.5"
+          autoFocus
+          value={factorInput}
+          onChange={e => setFactorInput(e.target.value)}
+          className="w-16 h-6 text-right text-xs px-1"
+        />
+        <Button size="xs" onClick={() => confirmFactor(p.symbol)}>確認</Button>
+        <Button size="xs" variant="ghost" onClick={() => setEditingSymbol(null)}>取消</Button>
+      </div>
+    ) : (
+      <div className="flex items-center justify-end gap-1">
+        <Button
+          size="xs"
+          variant="ghost"
+          title="槓桿倍數：曝險＝市值×倍數，點擊修改"
+          onClick={() => { setEditingSymbol(p.symbol); setFactorInput(String(p.factor)); }}
+        >
+          {p.factor === 1 && !p.factor_overridden ? "—" : (
+            <span className="rounded-full bg-accent text-accent-foreground px-1.5 py-0.5 text-[11px] font-semibold">
+              {p.factor}x{p.factor_overridden ? "*" : ""}
+            </span>
+          )}
+        </Button>
+        {p.factor_overridden && (
+          <Button size="xs" variant="ghost" onClick={() => restoreFactor(p.symbol)}>還原</Button>
+        )}
+      </div>
+    );
+
+  return (
+    <div className="bg-card border border-border rounded-xl">
+      {/* 桌面：表格 */}
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs text-muted-foreground border-b border-border">
+              <th className="text-left px-3 py-2 font-normal">標的</th>
+              <th className="text-right px-3 py-2 font-normal">數量</th>
+              <th className="text-right px-3 py-2 font-normal">均價</th>
+              <th className="text-right px-3 py-2 font-normal">現價</th>
+              <th className="text-right px-3 py-2 font-normal">市值</th>
+              <th className="text-right px-3 py-2 font-normal">未實現損益</th>
+              <th className="text-right px-3 py-2 font-normal">已實現</th>
+              <th className="text-right px-3 py-2 font-normal">槓桿</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.positions.map(p => {
+              const pct = unrealizedPctOf(p);
+              return (
+                <tr key={p.symbol} className="border-b border-border last:border-0">
+                  <td className="px-3 py-2">
+                    <div className="font-mono font-semibold">{p.symbol}</div>
+                    <div className="text-xs text-muted-foreground">{p.name}</div>
+                  </td>
+                  <td className="text-right px-3 py-2 tabular-nums">{p.quantity.toLocaleString("zh-TW")}</td>
+                  <td className="text-right px-3 py-2 tabular-nums">{formatPrice(p.avg_cost)}</td>
+                  <td className="text-right px-3 py-2 tabular-nums">{fmt(p.close)}</td>
+                  <td className="text-right px-3 py-2 tabular-nums">{fmt(p.market_value)}</td>
+                  <td className={`text-right px-3 py-2 tabular-nums ${p.unrealized != null ? gainLossClass(p.unrealized) : ""}`}>
+                    <div>{fmt(p.unrealized)}</div>
+                    {pct != null && <div className="text-xs opacity-75">{formatPercent(pct)}</div>}
+                  </td>
+                  <td className={`text-right px-3 py-2 tabular-nums ${gainLossClass(p.realized)}`}>{formatPrice(p.realized)}</td>
+                  <td className="text-right px-3 py-2 tabular-nums">{factorCell(p)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 手機：卡片列 */}
+      <ul className="md:hidden divide-y divide-border list-none m-0 p-0">
+        {data.positions.map(p => {
+          const pct = unrealizedPctOf(p);
+          return (
+            <li key={p.symbol} className="px-4 py-3 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-mono font-semibold">{p.symbol}</span>
+                  {(p.factor !== 1 || p.factor_overridden) && (
+                    <span className="rounded-full bg-accent text-accent-foreground px-1.5 py-0.5 text-[11px] font-semibold">
+                      {p.factor}x
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground truncate">{p.name}</div>
+                <div className="text-xs text-muted-foreground tabular-nums">
+                  {p.quantity.toLocaleString("zh-TW")} · 均 {formatPrice(p.avg_cost)} · 現 {p.close == null ? "—" : formatPrice(p.close)}
+                </div>
+              </div>
+              <div className={`text-right tabular-nums ${p.unrealized != null ? gainLossClass(p.unrealized) : ""}`}>
+                <div className="text-sm font-medium">{fmt(p.unrealized)}</div>
+                {pct != null && <div className="text-xs opacity-75">{formatPercent(pct)}</div>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+};

@@ -28,6 +28,9 @@
   --color-ring: var(--ring);
   --color-gain: var(--gain);
   --color-loss: var(--loss);
+  --color-cat-cash: var(--cat-cash);
+  --color-cat-stock: var(--cat-stock);
+  --color-cat-liability: var(--cat-liability);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -59,6 +62,9 @@
     --ring: #6250E8;
     --gain: #DB2745;
     --loss: #008A6C;
+    --cat-cash: #0EA5E9;
+    --cat-stock: #6250E8;
+    --cat-liability: #D97706;
     --radius: 0.5rem;
   }
   .dark {
@@ -83,6 +89,9 @@
     --ring: #7B6EF6;
     --gain: #FF4560;
     --loss: #00C896;
+    --cat-cash: #0284C7;
+    --cat-stock: #7B6EF6;
+    --cat-liability: #D97706;
   }
   * {
     @apply border-border outline-ring/50;

@@ -6,6 +6,13 @@ import {
 } from "./schemas/stock";
 import { GroupSchema, Group, BatchAddItem } from "./schemas/watchlist";
 import { BacktestRequest, BacktestResult, BacktestResultSchema } from "./schemas/backtest";
+import {
+  PortfolioSummarySchema, PortfolioSummary,
+  PositionsResponseSchema, PositionsResponse,
+  PortfolioTransactionSchema, PortfolioTransaction,
+  PortfolioAccountSchema, PortfolioAccount,
+  TransactionInput,
+} from "./schemas/portfolio";
 
 const BASE = `${import.meta.env.VITE_API_BASE ?? "http://localhost:8000"}/api`;
 
@@ -222,3 +229,74 @@ export const runBacktest = (req: BacktestRequest): Promise<BacktestResult> =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
   });
+
+export const getPortfolioSummary = (): Promise<PortfolioSummary> =>
+  apiFetch(PortfolioSummarySchema, `${BASE}/portfolio/summary`);
+
+export const getPortfolioPositions = (): Promise<PositionsResponse> =>
+  apiFetch(PositionsResponseSchema, `${BASE}/portfolio/positions`);
+
+export const getPortfolioTransactions = (symbol?: string): Promise<PortfolioTransaction[]> =>
+  apiFetch(z.array(PortfolioTransactionSchema),
+    `${BASE}/portfolio/transactions${symbol ? `?symbol=${encodeURIComponent(symbol)}` : ""}`);
+
+export const createPortfolioTransaction = (input: TransactionInput): Promise<{ id: number }> =>
+  apiFetch(z.object({ id: z.number() }), `${BASE}/portfolio/transactions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+export const updatePortfolioTransaction = (id: number, input: Partial<TransactionInput>): Promise<PortfolioTransaction> =>
+  apiFetch(PortfolioTransactionSchema, `${BASE}/portfolio/transactions/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+export const deletePortfolioTransaction = async (id: number): Promise<void> => {
+  const res = await fetch(`${BASE}/portfolio/transactions/${id}`, { method: "DELETE", headers: await authHeaders() });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+};
+
+export const getPortfolioAccounts = (): Promise<PortfolioAccount[]> =>
+  apiFetch(z.array(PortfolioAccountSchema), `${BASE}/portfolio/accounts`);
+
+export const createPortfolioAccount = (name: string, kind: "asset" | "liability"): Promise<{ id: number }> =>
+  apiFetch(z.object({ id: z.number() }), `${BASE}/portfolio/accounts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, kind }),
+  });
+
+export const updatePortfolioAccount = (id: number, patch: { name?: string; sort_order?: number }) =>
+  apiFetch(z.object({ id: z.number(), name: z.string(), kind: z.string(), sort_order: z.number() }),
+    `${BASE}/portfolio/accounts/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+
+export const deletePortfolioAccount = async (id: number): Promise<void> => {
+  const res = await fetch(`${BASE}/portfolio/accounts/${id}`, { method: "DELETE", headers: await authHeaders() });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+};
+
+export const addAccountEntry = (accountId: number, kind: "deposit" | "withdraw" | "adjust", amount: number, note?: string): Promise<{ id: number }> =>
+  apiFetch(z.object({ id: z.number() }), `${BASE}/portfolio/accounts/${accountId}/entries`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind, amount, note }),
+  });
+
+export const setLeverage = (symbol: string, factor: number) =>
+  apiFetch(z.object({ symbol: z.string(), factor: z.number() }), `${BASE}/portfolio/leverage/${symbol}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ factor }),
+  });
+
+export const clearLeverage = async (symbol: string): Promise<void> => {
+  const res = await fetch(`${BASE}/portfolio/leverage/${symbol}`, { method: "DELETE", headers: await authHeaders() });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+};

@@ -80,4 +80,43 @@ def init_db() -> None:
                 acc_yoy_pct DOUBLE PRECISION,
                 PRIMARY KEY (symbol, year_month)
             );
+            CREATE TABLE IF NOT EXISTS portfolio_accounts (
+                id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                user_id    UUID    NOT NULL,
+                name       TEXT    NOT NULL,
+                kind       TEXT    NOT NULL CHECK (kind IN ('asset','liability')),
+                sort_order INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS portfolio_accounts_user_idx ON portfolio_accounts(user_id);
+            CREATE TABLE IF NOT EXISTS portfolio_transactions (
+                id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                user_id    UUID    NOT NULL,
+                symbol     TEXT    NOT NULL,
+                side       TEXT    NOT NULL CHECK (side IN ('buy','sell','dividend','stock_dividend')),
+                quantity   NUMERIC NOT NULL,
+                price      NUMERIC NOT NULL DEFAULT 0,
+                fee        NUMERIC NOT NULL DEFAULT 0,
+                tax        NUMERIC NOT NULL DEFAULT 0,
+                account_id INTEGER REFERENCES portfolio_accounts(id) ON DELETE SET NULL,
+                traded_at  DATE    NOT NULL,
+                note       TEXT
+            );
+            CREATE INDEX IF NOT EXISTS portfolio_tx_user_idx ON portfolio_transactions(user_id);
+            CREATE TABLE IF NOT EXISTS portfolio_cash_entries (
+                id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                user_id        UUID    NOT NULL,
+                account_id     INTEGER NOT NULL REFERENCES portfolio_accounts(id) ON DELETE CASCADE,
+                kind           TEXT    NOT NULL CHECK (kind IN ('deposit','withdraw','adjust','trade','dividend')),
+                amount         NUMERIC NOT NULL,
+                transaction_id INTEGER REFERENCES portfolio_transactions(id) ON DELETE CASCADE,
+                entry_date     DATE    NOT NULL,
+                note           TEXT
+            );
+            CREATE INDEX IF NOT EXISTS portfolio_cash_account_idx ON portfolio_cash_entries(account_id);
+            CREATE TABLE IF NOT EXISTS portfolio_leverage (
+                user_id UUID    NOT NULL,
+                symbol  TEXT    NOT NULL,
+                factor  NUMERIC NOT NULL,
+                PRIMARY KEY (user_id, symbol)
+            );
         """)

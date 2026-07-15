@@ -7,10 +7,12 @@ const MarketPage    = lazy(() => import("@/pages/market"));
 const WatchlistPage = lazy(() => import("@/pages/home"));
 const StockPage     = lazy(() => import("@/pages/stock"));
 const BacktestPage  = lazy(() => import("@/pages/backtest"));
+const PortfolioPage = lazy(() => import("@/pages/portfolio"));
 
 const NAV_ITEMS = [
   { to: "/",          label: "市場",  icon: "home" },
   { to: "/watchlist", label: "自選股", icon: "list" },
+  { to: "/portfolio", label: "投組",  icon: "pie" },
   { to: "/backtest",  label: "回測",  icon: "chart" },
 ] as const;
 
@@ -24,6 +26,12 @@ const NavIcon: React.FC<{ type: string; active: boolean }> = ({ type, active }) 
   if (type === "list") return (
     <svg aria-hidden="true" className={cls} width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
       <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+  if (type === "pie") return (
+    <svg aria-hidden="true" className={cls} width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+      <path d="M11 3.05A9 9 0 1020.95 13H12a1 1 0 01-1-1V3.05z" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M15 3.34A9 9 0 0120.66 9H15V3.34z" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
   return (
@@ -80,7 +88,7 @@ const TopNav: React.FC = () => {
           <Link
             key={to}
             to={to}
-            className={`px-3 h-9 flex items-center rounded-full text-sm no-underline transition-colors ${
+            className={`px-2.5 h-9 flex items-center rounded-full text-sm no-underline whitespace-nowrap transition-colors ${
               active
                 ? "bg-accent text-accent-foreground font-semibold"
                 : "text-muted-foreground hover:bg-muted/50"
@@ -131,8 +139,9 @@ const watchlistRoute = createRoute({
 });
 const stockRoute     = createRoute({ getParentRoute: () => rootRoute, path: "/stock/$id", component: StockPage });
 const backtestRoute  = createRoute({ getParentRoute: () => rootRoute, path: "/backtest",  component: BacktestPage });
+const portfolioRoute = createRoute({ getParentRoute: () => rootRoute, path: "/portfolio", component: PortfolioPage });
 
-const routeTree = rootRoute.addChildren([marketRoute, watchlistRoute, stockRoute, backtestRoute]);
+const routeTree = rootRoute.addChildren([marketRoute, watchlistRoute, stockRoute, backtestRoute, portfolioRoute]);
 
 export const router = createRouter({ routeTree });
 

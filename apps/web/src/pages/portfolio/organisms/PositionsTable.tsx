@@ -85,8 +85,28 @@ export const PositionsTable: React.FC = () => {
       </div>
     );
 
+  const { gain, loss, net } = data.unrealized;
+
   return (
     <div className="bg-card border border-border rounded-xl">
+      <div className="px-4 py-2.5 border-b border-border flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
+        <span className="text-muted-foreground">未實現損益</span>
+        <span className="tabular-nums">
+          <span className="text-muted-foreground">獲利 </span>
+          <span className="text-gain">+{formatPrice(gain)}</span>
+        </span>
+        <span className="tabular-nums">
+          <span className="text-muted-foreground">虧損 </span>
+          <span className="text-loss">{formatPrice(loss)}</span>
+        </span>
+        <span className="tabular-nums">
+          <span className="text-muted-foreground">合計 </span>
+          <span className={`font-medium ${gainLossClass(net)}`}>{net >= 0 ? "+" : ""}{formatPrice(net)}</span>
+        </span>
+        {data.missing_symbols.length > 0 && (
+          <span className="text-muted-foreground">（不含 {data.missing_symbols.join("、")}）</span>
+        )}
+      </div>
       {/* 桌面：表格 */}
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm">
@@ -108,13 +128,23 @@ export const PositionsTable: React.FC = () => {
               return (
                 <tr key={p.symbol} className="border-b border-border last:border-0">
                   <td className="px-3 py-2">
-                    <div className="font-mono font-semibold">{p.symbol}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-semibold">{p.symbol}</span>
+                      {p.currency === "USD" && (
+                        <span className="rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">USD</span>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground">{p.name}</div>
                   </td>
                   <td className="text-right px-3 py-2 tabular-nums">{p.quantity.toLocaleString("zh-TW")}</td>
                   <td className="text-right px-3 py-2 tabular-nums">{formatPrice(p.avg_cost)}</td>
                   <td className="text-right px-3 py-2 tabular-nums">{fmt(p.close)}</td>
-                  <td className="text-right px-3 py-2 tabular-nums">{fmt(p.market_value)}</td>
+                  <td className="text-right px-3 py-2 tabular-nums">
+                    <div>{fmt(p.market_value)}</div>
+                    {p.currency === "USD" && p.market_value_twd != null && (
+                      <div className="text-xs text-muted-foreground">≈ {formatPrice(p.market_value_twd)}</div>
+                    )}
+                  </td>
                   <td className={`text-right px-3 py-2 tabular-nums ${p.unrealized != null ? gainLossClass(p.unrealized) : ""}`}>
                     <div>{fmt(p.unrealized)}</div>
                     {pct != null && <div className="text-xs opacity-75">{formatPercent(pct)}</div>}
@@ -137,6 +167,9 @@ export const PositionsTable: React.FC = () => {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="font-mono font-semibold">{p.symbol}</span>
+                  {p.currency === "USD" && (
+                    <span className="rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">USD</span>
+                  )}
                   {(p.factor !== 1 || p.factor_overridden) && (
                     <span className="rounded-full bg-accent text-accent-foreground px-1.5 py-0.5 text-[11px] font-semibold">
                       {p.factor}x

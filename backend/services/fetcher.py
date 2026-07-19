@@ -1,3 +1,4 @@
+import re
 import time
 import json
 import ssl
@@ -26,9 +27,17 @@ def _yahoo_get(yahoo_sym: str, params: str) -> dict:
     with urllib.request.urlopen(req, timeout=15, context=_SSL_CTX) as r:
         return json.loads(r.read())
 
+# 純字母開頭代號（AAPL、VTI、BTC-USD）→ 美股/國際，Yahoo 直接吃，不加台股後綴
+_US_SYMBOL = re.compile(r"[A-Z][A-Z0-9.\-]{0,9}")
+
+
+def is_us_symbol(symbol: str) -> bool:
+    return _US_SYMBOL.fullmatch(symbol) is not None
+
+
 def _resolve_yahoo_symbol(symbol: str) -> str | None:
     """Return cached suffix, or probe .TW then .TWO, cache winner."""
-    if symbol.startswith("^"):
+    if symbol.startswith("^") or is_us_symbol(symbol):
         return symbol
     if symbol in _suffix_cache:
         return f"{symbol}{_suffix_cache[symbol]}"
@@ -146,6 +155,25 @@ def _fetch_prices_from_yahoo(symbols: list[str]) -> list[dict[str, Any]]:
             if result:
                 results.append(result)
     return results
+
+_fx_cache: tuple[float, float] | None = None  # (ts, usd_twd)
+
+
+def get_usd_twd() -> float | None:
+    """USD→TWD 匯率，沿用 5min TTL 快取；抓不到時回上次成功值。"""
+    global _fx_cache
+    now = time.time()
+    if _fx_cache and now - _fx_cache[0] < _PRICE_TTL:
+        return _fx_cache[1]
+    try:
+        data = _yahoo_get("TWD=X", "range=1d&interval=1d")
+        rate = float(data["chart"]["result"][0]["meta"]["regularMarketPrice"])
+        _fx_cache = (now, rate)
+        return rate
+    except Exception as e:
+        print(f"[fetcher] USD/TWD fx failed: {e}")
+        return _fx_cache[1] if _fx_cache else None
+
 
 def get_batch_prices(symbols: list[str]) -> list[dict[str, Any]]:
     if not symbols:

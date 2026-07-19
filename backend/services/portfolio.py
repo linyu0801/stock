@@ -4,7 +4,7 @@ from decimal import Decimal
 from fastapi import HTTPException
 
 from db import get_conn
-from services.fetcher import get_batch_prices
+from services.fetcher import get_batch_prices, get_usd_twd, is_us_symbol
 
 _LEV_2X = re.compile(r"^\d+L$")
 _LEV_INV = re.compile(r"^\d+R$")
@@ -169,31 +169,61 @@ def _position_state(user_id: str) -> tuple[list[dict], list[str]]:
     held = {s: p for s, p in replayed.items() if p["qty"] > 0}
     prices = {p["symbol"]: p for p in get_batch_prices(list(held))} if held else {}
     missing = sorted(set(held) - set(prices))
+    has_us = any(is_us_symbol(s) for s in held)
+    rate = get_usd_twd() if has_us else None  # 有美股才打匯率
+    fx = Decimal(str(rate)) if rate is not None else None
     positions = []
     for symbol, p in held.items():
+        currency = "USD" if is_us_symbol(symbol) else "TWD"
         close = Decimal(str(prices[symbol]["close"])) if symbol in prices else None
         factor = overrides.get(symbol, infer_factor(symbol))
-        mv = close * p["qty"] if close is not None else None
+        mv = close * p["qty"] if close is not None else None  # 原幣市值
+        if mv is None:
+            mv_twd = None
+        elif currency == "USD":
+            mv_twd = mv * fx if fx is not None else None
+            if fx is None and symbol not in missing:
+                missing.append(symbol)  # 有價但無匯率：不入總額，標示不完整
+        else:
+            mv_twd = mv
         positions.append({
             "symbol": symbol,
             "name": meta.get(symbol, symbol),
+            "currency": currency,
             "quantity": p["qty"],
             "avg_cost": p["cost"] / p["qty"],
             "close": close,
             "market_value": mv,
+            "market_value_twd": mv_twd,
             "unrealized": (mv - p["cost"]) if mv is not None else None,
             "realized": p["realized"],
             "factor": factor,
             "factor_overridden": symbol in overrides,
-            "exposure": (mv * factor) if mv is not None else None,
+            "exposure": (mv_twd * factor) if mv_twd is not None else None,
         })
     positions.sort(key=lambda x: x["symbol"])
-    return positions, missing
+    gain = Decimal(0)
+    loss = Decimal(0)
+    for p in positions:
+        if p["unrealized"] is None:
+            continue
+        if p["currency"] == "USD":
+            if fx is None:
+                continue
+            u = p["unrealized"] * fx
+        else:
+            u = p["unrealized"]
+        if u >= 0:
+            gain += u
+        else:
+            loss += u
+    stats = {"gain": gain, "loss": loss, "net": gain + loss}
+    return positions, sorted(missing), stats
 
 
 def get_positions(user_id: str) -> dict:
-    positions, missing = _position_state(user_id)
-    return {"positions": positions, "missing_symbols": missing}
+    positions, missing, stats = _position_state(user_id)
+    return {"positions": positions, "missing_symbols": missing, "unrealized": stats}
 
 
 def _account_rows(conn, user_id: str) -> list[dict]:
@@ -208,12 +238,12 @@ def _account_rows(conn, user_id: str) -> list[dict]:
 
 
 def get_summary(user_id: str) -> dict:
-    positions, missing = _position_state(user_id)
+    positions, missing, _ = _position_state(user_id)
     with get_conn() as conn:
         accounts = _account_rows(conn, user_id)
     assets = sum((a["balance"] for a in accounts if a["kind"] == "asset"), Decimal(0))
     liabilities = sum((a["balance"] for a in accounts if a["kind"] == "liability"), Decimal(0))
-    stock_value = sum((p["market_value"] for p in positions if p["market_value"] is not None), Decimal(0))
+    stock_value = sum((p["market_value_twd"] for p in positions if p["market_value_twd"] is not None), Decimal(0))
     net_exposure = sum((p["exposure"] for p in positions if p["exposure"] is not None), Decimal(0))
     gross_exposure = sum((abs(p["exposure"]) for p in positions if p["exposure"] is not None), Decimal(0))
     net_worth = assets + stock_value - liabilities

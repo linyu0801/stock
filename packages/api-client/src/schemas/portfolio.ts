@@ -6,10 +6,12 @@ export type PortfolioSide = z.infer<typeof PortfolioSideSchema>;
 export const PositionSchema = z.object({
   symbol: z.string(),
   name: z.string(),
+  currency: z.enum(["TWD", "USD"]),
   quantity: z.number(),
   avg_cost: z.number(),
   close: z.number().nullable(),
   market_value: z.number().nullable(),
+  market_value_twd: z.number().nullable(),
   unrealized: z.number().nullable(),
   realized: z.number(),
   factor: z.number(),
@@ -21,6 +23,7 @@ export type Position = z.infer<typeof PositionSchema>;
 export const PositionsResponseSchema = z.object({
   positions: z.array(PositionSchema),
   missing_symbols: z.array(z.string()),
+  unrealized: z.object({ gain: z.number(), loss: z.number(), net: z.number() }),
 });
 export type PositionsResponse = z.infer<typeof PositionsResponseSchema>;
 

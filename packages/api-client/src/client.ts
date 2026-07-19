@@ -12,6 +12,7 @@ import {
   PortfolioTransactionSchema, PortfolioTransaction,
   PortfolioAccountSchema, PortfolioAccount,
   TransactionInput,
+  AccountInput,
 } from "./schemas/portfolio";
 
 const BASE = `${import.meta.env.VITE_API_BASE ?? "http://localhost:8000"}/api`;
@@ -262,15 +263,26 @@ export const deletePortfolioTransaction = async (id: number): Promise<void> => {
 export const getPortfolioAccounts = (): Promise<PortfolioAccount[]> =>
   apiFetch(z.array(PortfolioAccountSchema), `${BASE}/portfolio/accounts`);
 
-export const createPortfolioAccount = (name: string, kind: "asset" | "liability"): Promise<{ id: number }> =>
+export const createPortfolioAccount = (input: AccountInput): Promise<{ id: number }> =>
   apiFetch(z.object({ id: z.number() }), `${BASE}/portfolio/accounts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, kind }),
+    body: JSON.stringify(input),
   });
 
-export const updatePortfolioAccount = (id: number, patch: { name?: string; sort_order?: number }) =>
-  apiFetch(z.object({ id: z.number(), name: z.string(), kind: z.string(), sort_order: z.number() }),
+export const updatePortfolioAccount = (
+  id: number,
+  patch: { name?: string; sort_order?: number; rate?: number | null; due_date?: string | null },
+) =>
+  apiFetch(
+    z.object({
+      id: z.number(),
+      name: z.string(),
+      kind: z.string(),
+      sort_order: z.number(),
+      rate: z.number().nullable(),
+      due_date: z.string().nullable(),
+    }),
     `${BASE}/portfolio/accounts/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

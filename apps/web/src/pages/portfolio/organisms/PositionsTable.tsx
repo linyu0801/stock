@@ -57,6 +57,7 @@ export const PositionsTable: React.FC = () => {
           type="number"
           step="0.5"
           autoFocus
+          onFocus={e => e.target.select()}
           value={factorInput}
           onChange={e => setFactorInput(e.target.value)}
           className="w-16 h-6 text-right text-xs px-1"

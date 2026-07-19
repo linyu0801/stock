@@ -27,6 +27,8 @@ const SIDE_OPTIONS: { value: PortfolioSide; label: string }[] = [
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
+const selectAll = (e: React.FocusEvent<HTMLInputElement>) => e.target.select();
+
 // 台股代號才自動帶台股費率；其他標的（加密貨幣、美股…）費用自填
 const isTwSymbol = (s: string) => /^\d{4,6}[A-Z]?$/.test(s.trim().toUpperCase());
 
@@ -115,17 +117,18 @@ export const TransactionModal: React.FC<Props> = ({ open, onClose, initial }) =>
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             數量
-            <Input type="number" inputMode="decimal" value={quantity} onChange={e => setQuantity(e.target.value)} />
+            <Input type="number" inputMode="decimal" onFocus={selectAll} value={quantity} onChange={e => setQuantity(e.target.value)} />
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             {side === "dividend" ? "每單位配息" : "價格"}
-            <Input type="number" inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} />
+            <Input type="number" inputMode="decimal" onFocus={selectAll} value={price} onChange={e => setPrice(e.target.value)} />
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             手續費
             <Input
               type="number"
               inputMode="decimal"
+              onFocus={selectAll}
               value={feeDirty ? feeRaw : String(feeDefault)}
               onChange={e => { setFeeDirty(true); setFeeRaw(e.target.value); }}
             />
@@ -136,6 +139,7 @@ export const TransactionModal: React.FC<Props> = ({ open, onClose, initial }) =>
               <Input
                 type="number"
                 inputMode="decimal"
+                onFocus={selectAll}
                 value={taxDirty ? taxRaw : String(taxDefault)}
                 onChange={e => { setTaxDirty(true); setTaxRaw(e.target.value); }}
               />

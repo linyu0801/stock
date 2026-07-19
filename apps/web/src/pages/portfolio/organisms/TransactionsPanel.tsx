@@ -6,18 +6,19 @@ import {
   type PortfolioTransaction,
   type PortfolioSide,
 } from "@taiwan-stock/api-client";
-import { Coins, Gift, Minus, Pencil, Plus, Search, Trash2, type LucideIcon } from "lucide-react";
+import { Pencil, Search, Trash2 } from "lucide-react";
 import { formatPrice } from "@/shared/lib/format";
 import { Button } from "@/shared/ui/atoms/button";
 import { Input } from "@/shared/ui/atoms/input";
 import { Skeleton } from "@/shared/ui/atoms/skeleton";
+import { ConfirmDialog } from "../molecules/ConfirmDialog";
 import { TransactionModal } from "../molecules/TransactionModal";
 
-const SIDE_META: Record<PortfolioSide, { label: string; Icon: LucideIcon }> = {
-  buy: { label: "買進", Icon: Plus },
-  sell: { label: "賣出", Icon: Minus },
-  dividend: { label: "配息", Icon: Coins },
-  stock_dividend: { label: "配股", Icon: Gift },
+const SIDE_META: Record<PortfolioSide, { label: string; glyph: string }> = {
+  buy: { label: "買進", glyph: "買" },
+  sell: { label: "賣出", glyph: "賣" },
+  dividend: { label: "配息", glyph: "息" },
+  stock_dividend: { label: "配股", glyph: "股" },
 };
 
 const FILTERS: { value: PortfolioSide | "all"; label: string }[] = [
@@ -49,10 +50,14 @@ export const TransactionsPanel: React.FC = () => {
   const [modalTarget, setModalTarget] = useState<PortfolioTransaction | "new" | null>(null);
   const [keyword, setKeyword] = useState("");
   const [filter, setFilter] = useState<PortfolioSide | "all">("all");
+  const [deleteTarget, setDeleteTarget] = useState<PortfolioTransaction | null>(null);
 
   const deleteMutation = useMutation({
     mutationFn: deletePortfolioTransaction,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["portfolio"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["portfolio"] });
+      setDeleteTarget(null);
+    },
   });
 
   const kw = keyword.trim().toUpperCase();
@@ -101,12 +106,15 @@ export const TransactionsPanel: React.FC = () => {
       ) : (
         <ul className="divide-y divide-border list-none m-0 p-0 max-h-96 overflow-y-auto">
           {filtered.map(t => {
-            const { label, Icon } = SIDE_META[t.side];
+            const { label, glyph } = SIDE_META[t.side];
             const impact = cashImpact(t);
             return (
               <li key={t.id} className="px-4 py-2.5 flex items-center gap-3 text-sm">
-                <span className="size-8 shrink-0 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
-                  <Icon size={14} />
+                <span
+                  aria-hidden="true"
+                  className="size-8 shrink-0 rounded-full bg-muted flex items-center justify-center text-xs text-muted-foreground select-none"
+                >
+                  {glyph}
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-1.5">
@@ -122,12 +130,7 @@ export const TransactionsPanel: React.FC = () => {
                   <Button size="icon-xs" variant="ghost" aria-label="編輯" onClick={() => setModalTarget(t)}>
                     <Pencil />
                   </Button>
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    aria-label="刪除"
-                    onClick={() => { if (confirm(`刪除 ${t.symbol} ${t.traded_at} 這筆交易？`)) deleteMutation.mutate(t.id); }}
-                  >
+                  <Button size="icon-xs" variant="ghost" aria-label="刪除" onClick={() => setDeleteTarget(t)}>
                     <Trash2 />
                   </Button>
                 </div>
@@ -144,6 +147,14 @@ export const TransactionsPanel: React.FC = () => {
           onClose={() => setModalTarget(null)}
         />
       )}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={`刪除 ${deleteTarget?.symbol ?? ""} ${deleteTarget ? SIDE_META[deleteTarget.side].label : ""}紀錄？`}
+        description={deleteTarget ? `${subText(deleteTarget)} · ${deleteTarget.traded_at}` : undefined}
+        pending={deleteMutation.isPending}
+        onConfirm={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget.id); }}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 };

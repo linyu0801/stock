@@ -1,4 +1,5 @@
 import re
+from datetime import date, timedelta
 from decimal import Decimal
 from fastapi import HTTPException
 
@@ -195,25 +196,35 @@ def get_positions(user_id: str) -> dict:
     return {"positions": positions, "missing_symbols": missing}
 
 
+def _account_rows(conn, user_id: str) -> list[dict]:
+    return conn.execute(
+        "SELECT a.id, a.name, a.kind, a.sort_order, a.rate, a.due_date, "
+        "COALESCE(SUM(e.amount), 0) AS balance "
+        "FROM portfolio_accounts a "
+        "LEFT JOIN portfolio_cash_entries e ON e.account_id = a.id "
+        "WHERE a.user_id = %s GROUP BY a.id ORDER BY a.sort_order, a.id",
+        (user_id,),
+    ).fetchall()
+
+
 def get_summary(user_id: str) -> dict:
     positions, missing = _position_state(user_id)
     with get_conn() as conn:
-        totals = {
-            r["kind"]: r["total"]
-            for r in conn.execute(
-                "SELECT a.kind, COALESCE(SUM(e.amount), 0) AS total "
-                "FROM portfolio_accounts a "
-                "LEFT JOIN portfolio_cash_entries e ON e.account_id = a.id "
-                "WHERE a.user_id = %s GROUP BY a.kind",
-                (user_id,),
-            ).fetchall()
-        }
-    assets = totals.get("asset", Decimal(0))
-    liabilities = totals.get("liability", Decimal(0))
+        accounts = _account_rows(conn, user_id)
+    assets = sum((a["balance"] for a in accounts if a["kind"] == "asset"), Decimal(0))
+    liabilities = sum((a["balance"] for a in accounts if a["kind"] == "liability"), Decimal(0))
     stock_value = sum((p["market_value"] for p in positions if p["market_value"] is not None), Decimal(0))
     net_exposure = sum((p["exposure"] for p in positions if p["exposure"] is not None), Decimal(0))
     gross_exposure = sum((abs(p["exposure"]) for p in positions if p["exposure"] is not None), Decimal(0))
     net_worth = assets + stock_value - liabilities
+    total_assets = assets + stock_value
+    # 流動負債＝有填到期日且一年內到期；沒填視為長期，不計入
+    horizon = date.today() + timedelta(days=365)
+    current_liabilities = sum(
+        (a["balance"] for a in accounts
+         if a["kind"] == "liability" and a["due_date"] is not None and a["due_date"] <= horizon),
+        Decimal(0),
+    )
     return {
         "net_worth": net_worth,
         "assets_total": assets,
@@ -222,6 +233,8 @@ def get_summary(user_id: str) -> dict:
         "net_exposure": net_exposure,
         "gross_exposure": gross_exposure,
         "exposure_ratio": (net_exposure / net_worth) if net_worth > 0 else None,
+        "debt_ratio": (liabilities / total_assets) if total_assets > 0 else None,
+        "current_ratio": (total_assets / current_liabilities) if current_liabilities > 0 else None,
         "incomplete": bool(missing),
         "missing_symbols": missing,
     }
@@ -229,36 +242,47 @@ def get_summary(user_id: str) -> dict:
 
 def list_accounts(user_id: str) -> list[dict]:
     with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT a.id, a.name, a.kind, a.sort_order, COALESCE(SUM(e.amount), 0) AS balance "
-            "FROM portfolio_accounts a "
-            "LEFT JOIN portfolio_cash_entries e ON e.account_id = a.id "
-            "WHERE a.user_id = %s GROUP BY a.id ORDER BY a.sort_order, a.id",
-            (user_id,),
-        ).fetchall()
+        rows = _account_rows(conn, user_id)
     return [dict(r) for r in rows]
 
 
-def create_account(user_id: str, name: str, kind: str) -> dict:
+def create_account(
+    user_id: str, name: str, kind: str,
+    initial_balance: Decimal, rate: Decimal | None, due_date,
+) -> dict:
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO portfolio_accounts (user_id, name, kind, sort_order) "
-            "VALUES (%s, %s, %s, (SELECT COALESCE(MAX(sort_order),0)+1 FROM portfolio_accounts WHERE user_id = %s)) "
+            "INSERT INTO portfolio_accounts (user_id, name, kind, sort_order, rate, due_date) "
+            "VALUES (%s, %s, %s, (SELECT COALESCE(MAX(sort_order),0)+1 FROM portfolio_accounts WHERE user_id = %s), %s, %s) "
             "RETURNING id",
-            (user_id, name, kind, user_id),
+            (user_id, name, kind, user_id, rate, due_date),
         )
-        return {"id": cur.fetchone()["id"], "name": name, "kind": kind}
+        account_id = cur.fetchone()["id"]
+        if initial_balance:
+            conn.execute(
+                "INSERT INTO portfolio_cash_entries (user_id, account_id, kind, amount, entry_date) "
+                "VALUES (%s, %s, 'adjust', %s, CURRENT_DATE)",
+                (user_id, account_id, initial_balance),
+            )
+        return {"id": account_id, "name": name, "kind": kind}
 
 
-def update_account(user_id: str, account_id: int, name: str | None, sort_order: int | None) -> dict:
+def update_account(
+    user_id: str, account_id: int, name: str | None, sort_order: int | None,
+    rate: Decimal | None = None, due_date=None,
+) -> dict:
     with get_conn() as conn:
         _require_account(conn, account_id, user_id)
         if name is not None:
             conn.execute("UPDATE portfolio_accounts SET name = %s WHERE id = %s AND user_id = %s", (name, account_id, user_id))
         if sort_order is not None:
             conn.execute("UPDATE portfolio_accounts SET sort_order = %s WHERE id = %s AND user_id = %s", (sort_order, account_id, user_id))
+        if rate is not None:
+            conn.execute("UPDATE portfolio_accounts SET rate = %s WHERE id = %s AND user_id = %s", (rate, account_id, user_id))
+        if due_date is not None:
+            conn.execute("UPDATE portfolio_accounts SET due_date = %s WHERE id = %s AND user_id = %s", (due_date, account_id, user_id))
         row = conn.execute(
-            "SELECT id, name, kind, sort_order FROM portfolio_accounts WHERE id = %s", (account_id,)
+            "SELECT id, name, kind, sort_order, rate, due_date FROM portfolio_accounts WHERE id = %s", (account_id,)
         ).fetchone()
         return dict(row)
 
@@ -266,10 +290,12 @@ def update_account(user_id: str, account_id: int, name: str | None, sort_order: 
 def delete_account(user_id: str, account_id: int) -> None:
     with get_conn() as conn:
         _require_account(conn, account_id, user_id)
+        # 手動事件隨科目 CASCADE 清掉；被交易連動過的才擋（刪科目會默默毀交易的現金流）
         if conn.execute(
-            "SELECT 1 FROM portfolio_cash_entries WHERE account_id = %s LIMIT 1", (account_id,)
+            "SELECT 1 FROM portfolio_cash_entries WHERE account_id = %s AND transaction_id IS NOT NULL LIMIT 1",
+            (account_id,),
         ).fetchone() is not None:
-            raise HTTPException(409, "account has entries")
+            raise HTTPException(409, "account has linked transactions")
         conn.execute("DELETE FROM portfolio_accounts WHERE id = %s AND user_id = %s", (account_id, user_id))
 
 

@@ -32,6 +32,8 @@ export const PortfolioSummarySchema = z.object({
   net_exposure: z.number(),
   gross_exposure: z.number(),
   exposure_ratio: z.number().nullable(),
+  debt_ratio: z.number().nullable(),
+  current_ratio: z.number().nullable(),
   incomplete: z.boolean(),
   missing_symbols: z.array(z.string()),
 });
@@ -57,8 +59,18 @@ export const PortfolioAccountSchema = z.object({
   kind: z.enum(["asset", "liability"]),
   sort_order: z.number(),
   balance: z.number(),
+  rate: z.number().nullable(),
+  due_date: z.string().nullable(),
 });
 export type PortfolioAccount = z.infer<typeof PortfolioAccountSchema>;
+
+export type AccountInput = {
+  name: string;
+  kind: "asset" | "liability";
+  initial_balance?: number;
+  rate?: number | null;
+  due_date?: string | null;
+};
 
 export type TransactionInput = {
   symbol: string;

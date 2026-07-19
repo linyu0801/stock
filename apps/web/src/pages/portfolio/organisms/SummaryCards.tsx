@@ -73,12 +73,16 @@ export const SummaryCards: React.FC = () => {
         <div>
           <p className="text-xs text-muted-foreground">負債</p>
           <p className="mt-0.5 text-sm font-medium tabular-nums">{formatPrice(data.liabilities_total)}</p>
+          <p className="text-xs text-muted-foreground tabular-nums">
+            資產負債比 {data.debt_ratio == null ? "—" : `${(data.debt_ratio * 100).toFixed(1)}%`}
+            {" · "}流動比率 {data.current_ratio == null ? "—" : `${(data.current_ratio * 100).toFixed(0)}%`}
+          </p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">曝險比</p>
+          <p className="text-xs text-muted-foreground" title="曝險比＝淨曝險 ÷ 淨值；槓桿 ETF 以市值×倍數計">曝險比</p>
           <p className="mt-0.5 text-sm font-medium tabular-nums">{exposureRatioText}</p>
           <p className="text-xs text-muted-foreground tabular-nums">
-            淨 {formatPrice(data.net_exposure)} · 總 {formatPrice(data.gross_exposure)}
+            淨曝險 {formatPrice(data.net_exposure)} · 總曝險 {formatPrice(data.gross_exposure)}
           </p>
         </div>
       </div>

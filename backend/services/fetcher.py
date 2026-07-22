@@ -36,16 +36,19 @@ def is_us_symbol(symbol: str) -> bool:
 
 
 def _resolve_yahoo_symbol(symbol: str) -> str | None:
-    """Return cached suffix, or probe .TW then .TWO, cache winner."""
-    if symbol.startswith("^") or is_us_symbol(symbol):
+    """Return cached suffix, or probe candidates, cache winner."""
+    if symbol.startswith("^"):
         return symbol
     if symbol in _suffix_cache:
-        return f"{symbol}{_suffix_cache[symbol]}"
-    for suffix in (".TW", ".TWO"):
+        suffix = _suffix_cache[symbol]
+        return symbol if suffix == "" else f"{symbol}{suffix}"
+    # 美股/國際代號直接吃；裸代號的加密貨幣/穩定幣（USDT、BTC…）Yahoo 需要 -USD 後綴
+    candidates = (symbol, f"{symbol}-USD") if is_us_symbol(symbol) else (f"{symbol}.TW", f"{symbol}.TWO")
+    for candidate in candidates:
         try:
-            _yahoo_get(f"{symbol}{suffix}", "range=1d&interval=1d")
-            _suffix_cache[symbol] = suffix
-            return f"{symbol}{suffix}"
+            _yahoo_get(candidate, "range=1d&interval=1d")
+            _suffix_cache[symbol] = candidate[len(symbol):]
+            return candidate
         except Exception:
             continue
     return None

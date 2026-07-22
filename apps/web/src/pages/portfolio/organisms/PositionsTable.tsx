@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getPortfolioPositions, setLeverage, clearLeverage, type Position } from "@taiwan-stock/api-client";
+import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
 import { formatPrice, formatPercent, gainLossClass } from "@/shared/lib/format";
 import { Skeleton } from "@/shared/ui/atoms/skeleton";
 import { Button } from "@/shared/ui/atoms/button";
@@ -13,6 +14,15 @@ const unrealizedPctOf = (p: Position): number | null => {
   return p.unrealized != null && cost !== 0 ? (p.unrealized / cost) * 100 : null;
 };
 
+type SortKey = "symbol" | "close" | "pct" | "factor";
+
+const sortValOf = (p: Position, key: SortKey): string | number | null => {
+  if (key === "symbol") return p.symbol;
+  if (key === "close") return p.close;
+  if (key === "pct") return unrealizedPctOf(p);
+  return p.factor;
+};
+
 export const PositionsTable: React.FC = () => {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
@@ -21,6 +31,12 @@ export const PositionsTable: React.FC = () => {
   });
   const [editingSymbol, setEditingSymbol] = useState<string | null>(null);
   const [factorInput, setFactorInput] = useState("");
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "symbol", dir: 1 });
+
+  const toggleSort = (key: SortKey) =>
+    setSort(s => s.key === key
+      ? { key, dir: (s.dir * -1) as 1 | -1 }
+      : { key, dir: key === "symbol" ? 1 : -1 });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["portfolio"] });
 
@@ -87,6 +103,39 @@ export const PositionsTable: React.FC = () => {
 
   const { gain, loss, net } = data.unrealized;
 
+  const sorted = [...data.positions].sort((a, b) => {
+    const va = sortValOf(a, sort.key);
+    const vb = sortValOf(b, sort.key);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;   // 無值永遠沉底
+    if (vb == null) return -1;
+    if (typeof va === "string") return va.localeCompare(vb as string) * sort.dir;
+    return (va - (vb as number)) * sort.dir;
+  });
+
+  const sortIcon = (key: SortKey) =>
+    sort.key !== key
+      ? <ChevronsUpDown size={12} className="opacity-40" />
+      : sort.dir === 1
+        ? <ChevronUp size={12} />
+        : <ChevronDown size={12} />;
+
+  const sortableTh = (key: SortKey, label: string, align: "left" | "right") => (
+    <th
+      className={`px-3 py-2 font-normal ${align === "left" ? "text-left" : "text-right"}`}
+      aria-sort={sort.key === key ? (sort.dir === 1 ? "ascending" : "descending") : undefined}
+    >
+      <button
+        onClick={() => toggleSort(key)}
+        className={`inline-flex items-center gap-0.5 cursor-pointer hover:text-foreground transition-colors ${sort.key === key ? "text-foreground" : ""}`}
+      >
+        {align === "right" && sortIcon(key)}
+        {label}
+        {align === "left" && sortIcon(key)}
+      </button>
+    </th>
+  );
+
   return (
     <div className="bg-card border border-border rounded-xl">
       <div className="px-4 py-2.5 border-b border-border flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
@@ -112,18 +161,18 @@ export const PositionsTable: React.FC = () => {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-xs text-muted-foreground border-b border-border">
-              <th className="text-left px-3 py-2 font-normal">標的</th>
+              {sortableTh("symbol", "標的", "left")}
               <th className="text-right px-3 py-2 font-normal">數量</th>
               <th className="text-right px-3 py-2 font-normal">均價</th>
-              <th className="text-right px-3 py-2 font-normal">現價</th>
+              {sortableTh("close", "現價", "right")}
               <th className="text-right px-3 py-2 font-normal">市值</th>
-              <th className="text-right px-3 py-2 font-normal">未實現損益</th>
+              {sortableTh("pct", "未實現損益", "right")}
               <th className="text-right px-3 py-2 font-normal">已實現</th>
-              <th className="text-right px-3 py-2 font-normal">槓桿</th>
+              {sortableTh("factor", "槓桿", "right")}
             </tr>
           </thead>
           <tbody>
-            {data.positions.map(p => {
+            {sorted.map(p => {
               const pct = unrealizedPctOf(p);
               return (
                 <tr key={p.symbol} className="border-b border-border last:border-0">
@@ -146,8 +195,8 @@ export const PositionsTable: React.FC = () => {
                     )}
                   </td>
                   <td className={`text-right px-3 py-2 tabular-nums ${p.unrealized != null ? gainLossClass(p.unrealized) : ""}`}>
-                    <div>{fmt(p.unrealized)}</div>
-                    {pct != null && <div className="text-xs opacity-75">{formatPercent(pct)}</div>}
+                    <div>{pct == null ? "—" : formatPercent(pct)}</div>
+                    {p.unrealized != null && <div className="text-xs opacity-75">{formatPrice(p.unrealized)}</div>}
                   </td>
                   <td className={`text-right px-3 py-2 tabular-nums ${gainLossClass(p.realized)}`}>{formatPrice(p.realized)}</td>
                   <td className="text-right px-3 py-2 tabular-nums">{factorCell(p)}</td>
@@ -160,7 +209,7 @@ export const PositionsTable: React.FC = () => {
 
       {/* 手機：卡片列 */}
       <ul className="md:hidden divide-y divide-border list-none m-0 p-0">
-        {data.positions.map(p => {
+        {sorted.map(p => {
           const pct = unrealizedPctOf(p);
           return (
             <li key={p.symbol} className="px-4 py-3 flex items-center gap-3">
@@ -182,8 +231,8 @@ export const PositionsTable: React.FC = () => {
                 </div>
               </div>
               <div className={`text-right tabular-nums ${p.unrealized != null ? gainLossClass(p.unrealized) : ""}`}>
-                <div className="text-sm font-medium">{fmt(p.unrealized)}</div>
-                {pct != null && <div className="text-xs opacity-75">{formatPercent(pct)}</div>}
+                <div className="text-sm font-medium">{pct == null ? "—" : formatPercent(pct)}</div>
+                {p.unrealized != null && <div className="text-xs opacity-75">{formatPrice(p.unrealized)}</div>}
               </div>
             </li>
           );

@@ -6,6 +6,7 @@ import urllib.request
 from urllib.parse import quote
 
 from db import get_conn
+from services.limit_price import limit_status
 
 _SSL_CTX = ssl.create_default_context()
 _SSL_CTX.check_hostname = False
@@ -123,11 +124,14 @@ def _fetch_concept_stocks_from_yahoo(category: str) -> list[dict]:
             pct = round(float(pct_str), 2)
         except ValueError:
             pct = None
+        close = _extract(s.get("price"))
+        prev_close = close / (1 + pct / 100) if close is not None and pct not in (None, -100) else None
         result.append({
             "symbol": symbol,
             "name": s.get("symbolName", symbol),
-            "close": _extract(s.get("price")),
+            "close": close,
             "change_pct": pct,
+            "limit": limit_status(close, prev_close),
         })
     return result
 
@@ -161,6 +165,6 @@ def get_concept_stocks(category: str) -> list[dict]:
             (category,),
         ).fetchall()
     return [
-        {"symbol": r["symbol"], "name": r["name"], "close": None, "change_pct": None}
+        {"symbol": r["symbol"], "name": r["name"], "close": None, "change_pct": None, "limit": None}
         for r in rows
     ]

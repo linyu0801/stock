@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import type { Mover } from "@taiwan-stock/api-client";
 import { formatVolume } from "@/shared/lib/format";
+import { LimitBadge } from "@/shared/ui/atoms/limit-badge";
 import { AddToGroupButton } from "./AddToGroupButton";
 
 type Props = { item: Mover; rank: number };
@@ -20,8 +21,11 @@ export const MoverRow: React.FC<Props> = ({ item, rank }) => {
         <span className="block sm:inline text-xs text-muted-foreground truncate">{item.name}</span>
       </Link>
       <span className="text-sm text-right tabular-nums">{item.close.toFixed(2)}</span>
-      <span className={`text-sm font-semibold text-right tabular-nums ${isGain ? "text-gain" : "text-loss"}`}>
-        {isGain ? "+" : ""}{item.change_pct.toFixed(2)}%
+      <span className="flex flex-col items-end gap-0.5">
+        <span className={`text-sm font-semibold text-right tabular-nums ${isGain ? "text-gain" : "text-loss"}`}>
+          {isGain ? "+" : ""}{item.change_pct.toFixed(2)}%
+        </span>
+        <LimitBadge limit={item.limit} />
       </span>
       <span className="hidden sm:block text-xs text-right text-muted-foreground tabular-nums">
         {formatVolume(item.volume)}

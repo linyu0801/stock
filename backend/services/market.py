@@ -6,6 +6,7 @@ import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
+from services.limit_price import limit_status
 
 _SSL_CTX = ssl.create_default_context()
 _SSL_CTX.check_hostname = False
@@ -54,7 +55,7 @@ def _fetch_twse(date_param: str | None) -> tuple[list[dict], str] | None:
                 volume = int(row[3].replace(",", ""))
             except (ValueError, IndexError):
                 volume = 0
-            result.append({"symbol": symbol, "name": name, "close": close, "change_pct": pct, "volume": volume})
+            result.append({"symbol": symbol, "name": name, "close": close, "change_pct": pct, "volume": volume, "limit": limit_status(close, prev)})
         except (ValueError, IndexError):
             continue
     return result, date
@@ -89,7 +90,7 @@ def _fetch_tpex(date_param: str | None) -> tuple[list[dict], str] | None:
                 volume = int(row[8].replace(",", ""))
             except (ValueError, IndexError):
                 volume = 0
-            result.append({"symbol": symbol, "name": name, "close": close, "change_pct": pct, "volume": volume})
+            result.append({"symbol": symbol, "name": name, "close": close, "change_pct": pct, "volume": volume, "limit": limit_status(close, prev)})
         except (ValueError, IndexError):
             continue
     return result, date

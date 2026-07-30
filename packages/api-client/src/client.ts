@@ -36,7 +36,7 @@ async function apiFetch<T>(schema: z.ZodType<T>, url: string, init?: RequestInit
 export const searchStocks = (q: string): Promise<{ symbol: string; name: string }[]> =>
   apiFetch(z.array(z.object({ symbol: z.string(), name: z.string() })), `${BASE}/stock/search?q=${encodeURIComponent(q)}`);
 
-const StockPriceSchema = z.object({ symbol: z.string(), name: z.string(), close: z.number(), change: z.number(), change_pct: z.number(), volume: z.number() });
+const StockPriceSchema = z.object({ symbol: z.string(), name: z.string(), close: z.number(), change: z.number(), change_pct: z.number(), volume: z.number(), limit: z.enum(["up", "down"]).nullable() });
 export type StockPrice = z.infer<typeof StockPriceSchema>;
 export const getStockPrices = (symbols: string[]): Promise<StockPrice[]> =>
   apiFetch(z.array(StockPriceSchema), `${BASE}/stock/prices?symbols=${symbols.join(",")}`);
@@ -138,7 +138,7 @@ export const reorderGroupItems = (groupId: number, items: ReorderItem[]): Promis
     body: JSON.stringify({ group_id: groupId, items }),
   });
 
-const MoverSchema = z.object({ symbol: z.string(), name: z.string(), close: z.number(), change_pct: z.number(), volume: z.number() });
+const MoverSchema = z.object({ symbol: z.string(), name: z.string(), close: z.number(), change_pct: z.number(), volume: z.number(), limit: z.enum(["up", "down"]).nullable() });
 export type Mover = z.infer<typeof MoverSchema>;
 export type MoversResponse = { gainers: Mover[]; losers: Mover[]; volume: Mover[]; date: string | null };
 export const getMarketMovers = (): Promise<MoversResponse> =>
@@ -162,6 +162,7 @@ const ConceptStockSchema = z.object({
   name: z.string(),
   close: z.number().nullable(),
   change_pct: z.number().nullable(),
+  limit: z.enum(["up", "down"]).nullable(),
 });
 export type ConceptStock = z.infer<typeof ConceptStockSchema>;
 export const getConceptStocks = (category: string): Promise<ConceptStock[]> =>

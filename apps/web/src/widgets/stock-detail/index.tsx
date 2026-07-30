@@ -16,6 +16,7 @@ import {
 } from "@taiwan-stock/api-client";
 import { formatPrice, formatPercent } from "@/shared/lib/format";
 import { useIsDesktop } from "@/shared/lib/use-media";
+import { LimitBadge } from "@/shared/ui/atoms/limit-badge";
 import { StatBox } from "./atoms/StatBox";
 import { FundamentalsSection } from "./organisms/FundamentalsSection";
 import { DispositionNotice } from "./organisms/DispositionNotice";
@@ -97,6 +98,7 @@ const StockDetailPanel: React.FC<Props> = ({ symbol, variant = "page" }) => {
             <span className={`text-sm font-semibold tabular-nums ${isGain ? "text-gain" : "text-loss"}`}>
               {isGain ? "▲" : "▼"} {Math.abs(changePct).toFixed(2)}%
             </span>
+            <LimitBadge limit={info?.limit} />
           </span>
         )}
         {inline && (

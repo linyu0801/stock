@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { ConceptStock } from "@taiwan-stock/api-client";
+import { LimitBadge } from "@/shared/ui/atoms/limit-badge";
 import { AddToGroupButton } from "./AddToGroupButton";
 
 type Props = { item: ConceptStock };
@@ -22,8 +23,11 @@ export const ConceptRow: React.FC<Props> = ({ item }) => {
         {item.close != null ? item.close.toFixed(2) : "—"}
       </span>
       {pct != null ? (
-        <span className={`text-sm font-semibold text-right tabular-nums ${isGain ? "text-gain" : "text-loss"}`}>
-          {isGain ? "+" : ""}{pct.toFixed(2)}%
+        <span className="flex flex-col items-end gap-0.5">
+          <span className={`text-sm font-semibold text-right tabular-nums ${isGain ? "text-gain" : "text-loss"}`}>
+            {isGain ? "+" : ""}{pct.toFixed(2)}%
+          </span>
+          <LimitBadge limit={item.limit} />
         </span>
       ) : (
         <span className="text-sm text-right text-muted-foreground">—</span>

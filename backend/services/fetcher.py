@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
 from db import get_conn
+from services.limit_price import limit_status
 
 _SSL_CTX = ssl.create_default_context()
 _SSL_CTX.check_hostname = False
@@ -123,6 +124,7 @@ def get_stock_info(symbol: str) -> dict[str, Any] | None:
         "name":       name,
         "close":      latest["close"],
         "change_pct": round(change_pct, 2),
+        "limit":      limit_status(latest["close"], prev["close"]),
     }
 
 def _fetch_prices_from_yahoo(symbols: list[str]) -> list[dict[str, Any]]:
@@ -148,6 +150,7 @@ def _fetch_prices_from_yahoo(symbols: list[str]) -> list[dict[str, Any]]:
             "change":     change_abs,
             "change_pct": change_pct,
             "volume":     latest["volume"],
+            "limit":      limit_status(latest["close"], prev_close),
         }
 
     results = []

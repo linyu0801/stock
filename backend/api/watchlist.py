@@ -185,7 +185,7 @@ def update_stock(stock_id: int, body: StockUpdate, user_id: str = Depends(get_cu
             )
             if cur.rowcount == 0:
                 raise HTTPException(404, "stock not found")
-        if body.note is not None:
+        if "note" in body.model_fields_set:
             cur = conn.execute(
                 f"UPDATE stocks SET note = %s WHERE id = %s AND {_OWNED}",
                 (body.note, stock_id, user_id),

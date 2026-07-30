@@ -13,6 +13,18 @@ _LEV_INV = re.compile(r"^\d+R$")
 _CASH_KIND = {"buy": "trade", "sell": "trade", "dividend": "dividend"}
 
 
+def _monthly_payment(balance: Decimal, rate: Decimal, periods: int) -> Decimal:
+    """等額本息月付金。rate 為年利率(%)。"""
+    if periods <= 0 or balance <= 0:
+        return Decimal(0)
+    r = float(rate) / 100 / 12
+    n = periods
+    if r == 0:
+        return balance / n
+    factor = (1 + r) ** n
+    return balance * Decimal(str(r * factor / (factor - 1)))
+
+
 def infer_factor(symbol: str) -> Decimal:
     if _LEV_2X.match(symbol):
         return Decimal(2)
@@ -228,13 +240,25 @@ def get_positions(user_id: str) -> dict:
 
 def _account_rows(conn, user_id: str) -> list[dict]:
     return conn.execute(
-        "SELECT a.id, a.name, a.kind, a.sort_order, a.rate, a.due_date, "
+        "SELECT a.id, a.name, a.kind, a.sort_order, a.rate, a.due_date, a.periods, "
         "COALESCE(SUM(e.amount), 0) AS balance "
         "FROM portfolio_accounts a "
         "LEFT JOIN portfolio_cash_entries e ON e.account_id = a.id "
         "WHERE a.user_id = %s GROUP BY a.id ORDER BY a.sort_order, a.id",
         (user_id,),
     ).fetchall()
+
+
+def _current_portion(a: dict, horizon: date) -> Decimal:
+    """該負債科目未來 12 個月要還的金額。有期數+利率 → 攤銷月付×12（上限為餘額）；否則回退到期日全有全無。"""
+    if a["balance"] <= 0:
+        return Decimal(0)
+    if a["periods"] is not None and a["rate"] is not None:
+        monthly = _monthly_payment(a["balance"], a["rate"], a["periods"])
+        return min(a["balance"], monthly * 12)
+    if a["due_date"] is not None and a["due_date"] <= horizon:
+        return a["balance"]
+    return Decimal(0)
 
 
 def get_summary(user_id: str) -> dict:
@@ -248,11 +272,10 @@ def get_summary(user_id: str) -> dict:
     gross_exposure = sum((abs(p["exposure"]) for p in positions if p["exposure"] is not None), Decimal(0))
     net_worth = assets + stock_value - liabilities
     total_assets = assets + stock_value
-    # 流動負債＝有填到期日且一年內到期；沒填視為長期，不計入
+    # 流動負債：優先用期數+利率算攤銷月付×12；沒填期數才回退到期日全有全無
     horizon = date.today() + timedelta(days=365)
     current_liabilities = sum(
-        (a["balance"] for a in accounts
-         if a["kind"] == "liability" and a["due_date"] is not None and a["due_date"] <= horizon),
+        (_current_portion(a, horizon) for a in accounts if a["kind"] == "liability"),
         Decimal(0),
     )
     return {
@@ -278,14 +301,14 @@ def list_accounts(user_id: str) -> list[dict]:
 
 def create_account(
     user_id: str, name: str, kind: str,
-    initial_balance: Decimal, rate: Decimal | None, due_date,
+    initial_balance: Decimal, rate: Decimal | None, due_date, periods: int | None = None,
 ) -> dict:
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO portfolio_accounts (user_id, name, kind, sort_order, rate, due_date) "
-            "VALUES (%s, %s, %s, (SELECT COALESCE(MAX(sort_order),0)+1 FROM portfolio_accounts WHERE user_id = %s), %s, %s) "
+            "INSERT INTO portfolio_accounts (user_id, name, kind, sort_order, rate, due_date, periods) "
+            "VALUES (%s, %s, %s, (SELECT COALESCE(MAX(sort_order),0)+1 FROM portfolio_accounts WHERE user_id = %s), %s, %s, %s) "
             "RETURNING id",
-            (user_id, name, kind, user_id, rate, due_date),
+            (user_id, name, kind, user_id, rate, due_date, periods),
         )
         account_id = cur.fetchone()["id"]
         if initial_balance:
@@ -299,7 +322,7 @@ def create_account(
 
 def update_account(
     user_id: str, account_id: int, name: str | None, sort_order: int | None,
-    rate: Decimal | None = None, due_date=None,
+    rate: Decimal | None = None, due_date=None, periods: int | None = None,
 ) -> dict:
     with get_conn() as conn:
         _require_account(conn, account_id, user_id)
@@ -311,8 +334,10 @@ def update_account(
             conn.execute("UPDATE portfolio_accounts SET rate = %s WHERE id = %s AND user_id = %s", (rate, account_id, user_id))
         if due_date is not None:
             conn.execute("UPDATE portfolio_accounts SET due_date = %s WHERE id = %s AND user_id = %s", (due_date, account_id, user_id))
+        if periods is not None:
+            conn.execute("UPDATE portfolio_accounts SET periods = %s WHERE id = %s AND user_id = %s", (periods, account_id, user_id))
         row = conn.execute(
-            "SELECT id, name, kind, sort_order, rate, due_date FROM portfolio_accounts WHERE id = %s", (account_id,)
+            "SELECT id, name, kind, sort_order, rate, due_date, periods FROM portfolio_accounts WHERE id = %s", (account_id,)
         ).fetchone()
         return dict(row)
 

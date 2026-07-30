@@ -115,6 +115,7 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS portfolio_cash_account_idx ON portfolio_cash_entries(account_id);
             ALTER TABLE portfolio_accounts ADD COLUMN IF NOT EXISTS rate NUMERIC;
             ALTER TABLE portfolio_accounts ADD COLUMN IF NOT EXISTS due_date DATE;
+            ALTER TABLE portfolio_accounts ADD COLUMN IF NOT EXISTS periods INTEGER;
             CREATE TABLE IF NOT EXISTS portfolio_leverage (
                 user_id UUID    NOT NULL,
                 symbol  TEXT    NOT NULL,

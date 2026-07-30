@@ -64,6 +64,7 @@ export const PortfolioAccountSchema = z.object({
   balance: z.number(),
   rate: z.number().nullable(),
   due_date: z.string().nullable(),
+  periods: z.number().nullable(),
 });
 export type PortfolioAccount = z.infer<typeof PortfolioAccountSchema>;
 
@@ -73,6 +74,7 @@ export type AccountInput = {
   initial_balance?: number;
   rate?: number | null;
   due_date?: string | null;
+  periods?: number | null;
 };
 
 export type TransactionInput = {

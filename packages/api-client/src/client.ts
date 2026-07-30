@@ -273,7 +273,7 @@ export const createPortfolioAccount = (input: AccountInput): Promise<{ id: numbe
 
 export const updatePortfolioAccount = (
   id: number,
-  patch: { name?: string; sort_order?: number; rate?: number | null; due_date?: string | null },
+  patch: { name?: string; sort_order?: number; rate?: number | null; due_date?: string | null; periods?: number | null },
 ) =>
   apiFetch(
     z.object({
@@ -283,6 +283,7 @@ export const updatePortfolioAccount = (
       sort_order: z.number(),
       rate: z.number().nullable(),
       due_date: z.string().nullable(),
+      periods: z.number().nullable(),
     }),
     `${BASE}/portfolio/accounts/${id}`, {
       method: "PATCH",

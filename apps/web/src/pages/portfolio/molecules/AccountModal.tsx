@@ -25,14 +25,16 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, initial }) => {
   const [balance, setBalance] = useState(initial ? String(initial.balance) : "");
   const [rate, setRate] = useState(initial?.rate != null ? String(initial.rate) : "");
   const [due, setDue] = useState(initial?.due_date ?? "");
+  const [periods, setPeriods] = useState(initial?.periods != null ? String(initial.periods) : "");
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
     mutationFn: async () => {
       const rateVal = kind === "liability" && rate !== "" ? Number(rate) : null;
       const dueVal = kind === "liability" && due !== "" ? due : null;
+      const periodsVal = kind === "liability" && periods !== "" ? Number(periods) : null;
       if (initial) {
-        await updatePortfolioAccount(initial.id, { name: name.trim(), rate: rateVal, due_date: dueVal });
+        await updatePortfolioAccount(initial.id, { name: name.trim(), rate: rateVal, due_date: dueVal, periods: periodsVal });
         const target = Number(balance);
         if (!Number.isNaN(target) && target !== initial.balance) {
           await addAccountEntry(initial.id, "adjust", target - initial.balance);
@@ -44,6 +46,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, initial }) => {
           initial_balance: Number(balance) || 0,
           rate: rateVal,
           due_date: dueVal,
+          periods: periodsVal,
         });
       }
     },
@@ -109,6 +112,16 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, initial }) => {
               <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                 到期日（選填）
                 <Input type="date" value={due} onChange={e => setDue(e.target.value)} />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                期數（選填，分期時填）
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  onFocus={selectAll}
+                  value={periods}
+                  onChange={e => setPeriods(e.target.value)}
+                />
               </label>
             </>
           )}

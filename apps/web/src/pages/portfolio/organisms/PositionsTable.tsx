@@ -32,6 +32,7 @@ export const PositionsTable: React.FC = () => {
   const [editingSymbol, setEditingSymbol] = useState<string | null>(null);
   const [factorInput, setFactorInput] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "symbol", dir: 1 });
+  const [collapsed, setCollapsed] = useState(false);
 
   const toggleSort = (key: SortKey) =>
     setSort(s => s.key === key
@@ -138,7 +139,17 @@ export const PositionsTable: React.FC = () => {
 
   return (
     <div className="bg-card border border-border rounded-xl">
-      <div className="px-4 py-2.5 border-b border-border flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
+      <button
+        type="button"
+        onClick={() => setCollapsed(c => !c)}
+        aria-expanded={!collapsed}
+        aria-controls="positions-body"
+        className={`w-full px-4 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-left cursor-pointer hover:bg-accent/40 transition-colors rounded-t-xl ${collapsed ? "rounded-b-xl" : "border-b border-border"}`}
+      >
+        <span className="flex items-center gap-1.5 font-medium text-foreground">
+          <ChevronDown size={14} className={`transition-transform duration-200 motion-reduce:transition-none ${collapsed ? "-rotate-90" : ""}`} />
+          庫存
+        </span>
         <span className="text-muted-foreground">未實現損益</span>
         <span className="tabular-nums">
           <span className="text-muted-foreground">獲利 </span>
@@ -155,7 +166,10 @@ export const PositionsTable: React.FC = () => {
         {data.missing_symbols.length > 0 && (
           <span className="text-muted-foreground">（不含 {data.missing_symbols.join("、")}）</span>
         )}
-      </div>
+      </button>
+      <div id="positions-body">
+        {!collapsed && (
+          <>
       {/* 桌面：表格 */}
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm">
@@ -165,6 +179,7 @@ export const PositionsTable: React.FC = () => {
               <th className="text-right px-3 py-2 font-normal">數量</th>
               <th className="text-right px-3 py-2 font-normal">均價</th>
               {sortableTh("close", "現價", "right")}
+              <th className="text-right px-3 py-2 font-normal">成本</th>
               <th className="text-right px-3 py-2 font-normal">市值</th>
               {sortableTh("pct", "未實現損益", "right")}
               <th className="text-right px-3 py-2 font-normal">已實現</th>
@@ -188,6 +203,12 @@ export const PositionsTable: React.FC = () => {
                   <td className="text-right px-3 py-2 tabular-nums">{p.quantity.toLocaleString("zh-TW")}</td>
                   <td className="text-right px-3 py-2 tabular-nums">{formatPrice(p.avg_cost)}</td>
                   <td className="text-right px-3 py-2 tabular-nums">{fmt(p.close)}</td>
+                  <td className="text-right px-3 py-2 tabular-nums">
+                    <div>{fmt(p.avg_cost * p.quantity)}</div>
+                    {p.currency === "USD" && p.cost_twd != null && (
+                      <div className="text-xs text-muted-foreground">≈ {formatPrice(p.cost_twd)}</div>
+                    )}
+                  </td>
                   <td className="text-right px-3 py-2 tabular-nums">
                     <div>{fmt(p.market_value)}</div>
                     {p.currency === "USD" && p.market_value_twd != null && (
@@ -227,7 +248,7 @@ export const PositionsTable: React.FC = () => {
                 </div>
                 <div className="text-xs text-muted-foreground truncate">{p.name}</div>
                 <div className="text-xs text-muted-foreground tabular-nums">
-                  {p.quantity.toLocaleString("zh-TW")} · 均 {formatPrice(p.avg_cost)} · 現 {p.close == null ? "—" : formatPrice(p.close)}
+                  {p.quantity.toLocaleString("zh-TW")} · 均 {formatPrice(p.avg_cost)} · 現 {p.close == null ? "—" : formatPrice(p.close)} · 成本 {formatPrice(p.avg_cost * p.quantity)}
                 </div>
               </div>
               <div className={`text-right tabular-nums ${p.unrealized != null ? gainLossClass(p.unrealized) : ""}`}>
@@ -238,6 +259,9 @@ export const PositionsTable: React.FC = () => {
           );
         })}
       </ul>
+          </>
+        )}
+      </div>
     </div>
   );
 };

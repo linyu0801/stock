@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
+dayjs.extend(customParseFormat);
 import {
   createPortfolioAccount,
   updatePortfolioAccount,
@@ -9,6 +12,8 @@ import {
 import { Button } from "@/shared/ui/atoms/button";
 import { Input } from "@/shared/ui/atoms/input";
 import { Select } from "@/shared/ui/atoms/select";
+
+const DATE_FORMAT = "YYYY/MM/DD";
 
 type Props = {
   open: boolean;
@@ -24,17 +29,22 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, initial }) => {
   const [kind, setKind] = useState<"asset" | "liability">(initial?.kind ?? "asset");
   const [balance, setBalance] = useState(initial ? String(initial.balance) : "");
   const [rate, setRate] = useState(initial?.rate != null ? String(initial.rate) : "");
-  const [due, setDue] = useState(initial?.due_date ?? "");
+  const [dueText, setDueText] = useState(initial?.due_date ? dayjs(initial.due_date).format(DATE_FORMAT) : "");
   const [periods, setPeriods] = useState(initial?.periods != null ? String(initial.periods) : "");
+  const [currency, setCurrency] = useState<"TWD" | "USD">(initial?.currency ?? "TWD");
   const [error, setError] = useState<string | null>(null);
+
+  const dueTrimmed = dueText.trim();
+  const dueParsed = dueTrimmed === "" ? null : dayjs(dueTrimmed, DATE_FORMAT, true);
+  const dueInvalid = dueTrimmed !== "" && !dueParsed?.isValid();
 
   const mutation = useMutation({
     mutationFn: async () => {
       const rateVal = kind === "liability" && rate !== "" ? Number(rate) : null;
-      const dueVal = kind === "liability" && due !== "" ? due : null;
+      const dueVal = kind === "liability" && dueParsed?.isValid() ? dueParsed.format("YYYY-MM-DD") : null;
       const periodsVal = kind === "liability" && periods !== "" ? Number(periods) : null;
       if (initial) {
-        await updatePortfolioAccount(initial.id, { name: name.trim(), rate: rateVal, due_date: dueVal, periods: periodsVal });
+        await updatePortfolioAccount(initial.id, { name: name.trim(), rate: rateVal, due_date: dueVal, periods: periodsVal, currency });
         const target = Number(balance);
         if (!Number.isNaN(target) && target !== initial.balance) {
           await addAccountEntry(initial.id, "adjust", target - initial.balance);
@@ -47,6 +57,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, initial }) => {
           rate: rateVal,
           due_date: dueVal,
           periods: periodsVal,
+          currency,
         });
       }
     },
@@ -96,6 +107,14 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, initial }) => {
               onChange={e => setBalance(e.target.value)}
             />
           </label>
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            幣別
+            <Select
+              value={currency}
+              onValueChange={v => setCurrency(v as "TWD" | "USD")}
+              options={[{ value: "TWD", label: "台幣" }, { value: "USD", label: "美元" }]}
+            />
+          </label>
           {kind === "liability" && (
             <>
               <label className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -111,7 +130,13 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, initial }) => {
               </label>
               <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                 到期日（選填）
-                <Input type="date" value={due} onChange={e => setDue(e.target.value)} />
+                <Input
+                  value={dueText}
+                  onChange={e => setDueText(e.target.value)}
+                  placeholder={DATE_FORMAT}
+                  aria-invalid={dueInvalid}
+                />
+                {dueInvalid && <span className="text-destructive">格式需為 {DATE_FORMAT}</span>}
               </label>
               <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                 期數（選填，分期時填）
@@ -131,7 +156,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, initial }) => {
 
         <div className="flex gap-2 justify-end pt-1">
           <Button variant="ghost" size="sm" onClick={onClose}>取消</Button>
-          <Button size="sm" onClick={() => mutation.mutate()} disabled={mutation.isPending || !name.trim()}>
+          <Button size="sm" onClick={() => mutation.mutate()} disabled={mutation.isPending || !name.trim() || dueInvalid}>
             {initial ? "儲存" : "新增"}
           </Button>
         </div>

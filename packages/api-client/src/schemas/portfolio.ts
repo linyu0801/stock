@@ -12,6 +12,7 @@ export const PositionSchema = z.object({
   close: z.number().nullable(),
   market_value: z.number().nullable(),
   market_value_twd: z.number().nullable(),
+  cost_twd: z.number().nullable(),
   unrealized: z.number().nullable(),
   realized: z.number(),
   factor: z.number(),
@@ -32,10 +33,12 @@ export const PortfolioSummarySchema = z.object({
   assets_total: z.number(),
   liabilities_total: z.number(),
   stock_value: z.number(),
+  cost_total: z.number(),
   net_exposure: z.number(),
   gross_exposure: z.number(),
   exposure_ratio: z.number().nullable(),
   debt_ratio: z.number().nullable(),
+  current_liabilities: z.number().nullish(),
   current_ratio: z.number().nullable(),
   incomplete: z.boolean(),
   missing_symbols: z.array(z.string()),
@@ -62,9 +65,11 @@ export const PortfolioAccountSchema = z.object({
   kind: z.enum(["asset", "liability"]),
   sort_order: z.number(),
   balance: z.number(),
+  balance_twd: z.number().nullable(),
   rate: z.number().nullable(),
   due_date: z.string().nullable(),
   periods: z.number().nullable(),
+  currency: z.enum(["TWD", "USD"]),
 });
 export type PortfolioAccount = z.infer<typeof PortfolioAccountSchema>;
 
@@ -75,6 +80,7 @@ export type AccountInput = {
   rate?: number | null;
   due_date?: string | null;
   periods?: number | null;
+  currency?: "TWD" | "USD";
 };
 
 export type TransactionInput = {

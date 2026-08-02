@@ -273,7 +273,7 @@ export const createPortfolioAccount = (input: AccountInput): Promise<{ id: numbe
 
 export const updatePortfolioAccount = (
   id: number,
-  patch: { name?: string; sort_order?: number; rate?: number | null; due_date?: string | null; periods?: number | null },
+  patch: { name?: string; sort_order?: number; rate?: number | null; due_date?: string | null; periods?: number | null; currency?: "TWD" | "USD" },
 ) =>
   apiFetch(
     z.object({
@@ -284,6 +284,7 @@ export const updatePortfolioAccount = (
       rate: z.number().nullable(),
       due_date: z.string().nullable(),
       periods: z.number().nullable(),
+      currency: z.enum(["TWD", "USD"]),
     }),
     `${BASE}/portfolio/accounts/${id}`, {
       method: "PATCH",

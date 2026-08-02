@@ -44,6 +44,7 @@ class AccountCreate(BaseModel):
     rate: Optional[Decimal] = None
     due_date: Optional[date] = None
     periods: Optional[int] = None
+    currency: Literal["TWD", "USD"] = "TWD"
 
 
 class AccountUpdate(BaseModel):
@@ -52,6 +53,7 @@ class AccountUpdate(BaseModel):
     rate: Optional[Decimal] = None
     due_date: Optional[date] = None
     periods: Optional[int] = None
+    currency: Optional[Literal["TWD", "USD"]] = None
 
 
 class EntryCreate(BaseModel):
@@ -102,14 +104,14 @@ def accounts(user_id: str = Depends(get_current_user)):
 @router.post("/accounts", status_code=201)
 def create_account(body: AccountCreate, user_id: str = Depends(get_current_user)):
     return portfolio.create_account(
-        user_id, body.name, body.kind, body.initial_balance, body.rate, body.due_date, body.periods
+        user_id, body.name, body.kind, body.initial_balance, body.rate, body.due_date, body.periods, body.currency
     )
 
 
 @router.patch("/accounts/{account_id}")
 def update_account(account_id: int, body: AccountUpdate, user_id: str = Depends(get_current_user)):
     return portfolio.update_account(
-        user_id, account_id, body.name, body.sort_order, body.rate, body.due_date, body.periods
+        user_id, account_id, body.name, body.sort_order, body.rate, body.due_date, body.periods, body.currency
     )
 
 

@@ -116,6 +116,7 @@ def init_db() -> None:
             ALTER TABLE portfolio_accounts ADD COLUMN IF NOT EXISTS rate NUMERIC;
             ALTER TABLE portfolio_accounts ADD COLUMN IF NOT EXISTS due_date DATE;
             ALTER TABLE portfolio_accounts ADD COLUMN IF NOT EXISTS periods INTEGER;
+            ALTER TABLE portfolio_accounts ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'TWD';
             CREATE TABLE IF NOT EXISTS portfolio_leverage (
                 user_id UUID    NOT NULL,
                 symbol  TEXT    NOT NULL,

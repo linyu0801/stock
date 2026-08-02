@@ -11,6 +11,7 @@ import {
 import { Button } from "@/shared/ui/atoms/button";
 import { Input } from "@/shared/ui/atoms/input";
 import { Select } from "@/shared/ui/atoms/select";
+import { StockSearchCombobox } from "@/shared/ui/molecules/stock-search-combobox";
 
 type Props = {
   open: boolean;
@@ -101,7 +102,7 @@ export const TransactionModal: React.FC<Props> = ({ open, onClose, initial }) =>
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             標的
-            <Input value={symbol} onChange={e => setSymbol(e.target.value)} />
+            <StockSearchCombobox value={symbol} onChange={setSymbol} onSelect={setSymbol} placeholder="代碼或名稱…" />
           </label>
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             類型
@@ -145,14 +146,29 @@ export const TransactionModal: React.FC<Props> = ({ open, onClose, initial }) =>
               />
             </label>
           )}
-          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-            扣款科目
-            <Select
-              value={accountId == null ? "" : String(accountId)}
-              onValueChange={v => setAccountId(v ? Number(v) : null)}
-              options={accountOptions}
-            />
-          </label>
+        </div>
+
+        <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+          扣款科目
+          <div className="flex flex-wrap gap-1.5">
+            {accountOptions.map(opt => {
+              const active = (accountId == null ? "" : String(accountId)) === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setAccountId(opt.value ? Number(opt.value) : null)}
+                  className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                    active
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">

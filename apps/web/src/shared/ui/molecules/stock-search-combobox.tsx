@@ -4,10 +4,18 @@ import { searchStocks } from "@taiwan-stock/api-client";
 type Props = {
   onSelect: (symbol: string) => void;
   placeholder?: string;
+  /** 受控模式：提供 value+onChange 時，輸入框顯示目前值、選擇後不清空（適合編輯既有欄位，如新增交易的標的）。
+   *  不提供則維持原本「選完清空」模式（適合自選股那種選了就加入清單的用法）。 */
+  value?: string;
+  onChange?: (value: string) => void;
 };
 
-export const StockSearchCombobox: React.FC<Props> = ({ onSelect, placeholder = "輸入股票代碼或名稱…" }) => {
+export const StockSearchCombobox: React.FC<Props> = ({ onSelect, placeholder = "輸入股票代碼或名稱…", value, onChange }) => {
+  const controlled = value !== undefined;
   const [query, setQuery] = useState("");
+  const text = controlled ? value : query;
+  const setText = controlled ? onChange! : setQuery;
+
   const [results, setResults] = useState<{ symbol: string; name: string }[]>([]);
   const [open, setOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
@@ -17,10 +25,10 @@ export const StockSearchCombobox: React.FC<Props> = ({ onSelect, placeholder = "
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
-    if (!query.trim()) { setResults([]); setOpen(false); return; }
+    if (!text.trim()) { setResults([]); setOpen(false); return; }
     timer.current = setTimeout(async () => {
       try {
-        const data = await searchStocks(query);
+        const data = await searchStocks(text);
         setResults(data);
         setOpen(data.length > 0);
       } catch {
@@ -28,7 +36,7 @@ export const StockSearchCombobox: React.FC<Props> = ({ onSelect, placeholder = "
       }
     }, 200);
     return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [query]);
+  }, [text]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -51,17 +59,17 @@ export const StockSearchCombobox: React.FC<Props> = ({ onSelect, placeholder = "
 
   const select = (symbol: string) => {
     onSelect(symbol);
-    setQuery("");
     setResults([]);
     setOpen(false);
+    if (!controlled) setQuery("");
   };
 
   return (
     <div ref={containerRef} className="relative w-full">
       <input
         ref={inputRef}
-        value={query}
-        onChange={e => setQuery(e.target.value)}
+        value={text}
+        onChange={e => setText(e.target.value)}
         onFocus={handleFocus}
         onKeyDown={e => { if (e.key === "Escape") setOpen(false); }}
         placeholder={placeholder}

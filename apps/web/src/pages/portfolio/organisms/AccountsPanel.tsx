@@ -60,10 +60,20 @@ export const AccountsPanel: React.FC = () => {
             <div key={a.id} className="flex items-center gap-2.5 rounded-lg bg-muted/40 px-3 py-2 text-sm">
               <span className={`w-1 self-stretch rounded-full ${kind === "asset" ? "bg-cat-cash" : "bg-cat-liability"}`} />
               <div className="flex-1 min-w-0">
-                <div className="truncate">{a.name}</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate">{a.name}</span>
+                  {a.currency === "USD" && (
+                    <span className="rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground shrink-0">USD</span>
+                  )}
+                </div>
                 {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
               </div>
-              <span className="tabular-nums">{formatPrice(a.balance)}</span>
+              <div className="text-right">
+                <div className="tabular-nums">{formatPrice(a.balance)}</div>
+                {a.currency === "USD" && a.balance_twd != null && (
+                  <div className="text-xs text-muted-foreground tabular-nums">≈ {formatPrice(a.balance_twd)}</div>
+                )}
+              </div>
               <div className="flex shrink-0">
                 <Button size="icon-xs" variant="ghost" aria-label="編輯" onClick={() => setModalTarget(a)}>
                   <Pencil />

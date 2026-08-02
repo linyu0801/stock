@@ -198,6 +198,7 @@ def _position_state(user_id: str) -> tuple[list[dict], list[str]]:
                 missing.append(symbol)  # 有價但無匯率：不入總額，標示不完整
         else:
             mv_twd = mv
+        cost_twd = p["cost"] * fx if currency == "USD" and fx is not None else (p["cost"] if currency == "TWD" else None)
         positions.append({
             "symbol": symbol,
             "name": meta.get(symbol, symbol),
@@ -207,6 +208,7 @@ def _position_state(user_id: str) -> tuple[list[dict], list[str]]:
             "close": close,
             "market_value": mv,
             "market_value_twd": mv_twd,
+            "cost_twd": cost_twd,
             "unrealized": (mv - p["cost"]) if mv is not None else None,
             "realized": p["realized"],
             "factor": factor,
@@ -240,7 +242,7 @@ def get_positions(user_id: str) -> dict:
 
 def _account_rows(conn, user_id: str) -> list[dict]:
     return conn.execute(
-        "SELECT a.id, a.name, a.kind, a.sort_order, a.rate, a.due_date, a.periods, "
+        "SELECT a.id, a.name, a.kind, a.sort_order, a.rate, a.due_date, a.periods, a.currency, "
         "COALESCE(SUM(e.amount), 0) AS balance "
         "FROM portfolio_accounts a "
         "LEFT JOIN portfolio_cash_entries e ON e.account_id = a.id "
@@ -250,7 +252,7 @@ def _account_rows(conn, user_id: str) -> list[dict]:
 
 
 def _current_portion(a: dict, horizon: date) -> Decimal:
-    """該負債科目未來 12 個月要還的金額。有期數+利率 → 攤銷月付×12（上限為餘額）；否則回退到期日全有全無。"""
+    """該負債科目未來 12 個月要還的金額（原幣）。有期數+利率 → 攤銷月付×12（上限為餘額）；否則回退到期日全有全無。"""
     if a["balance"] <= 0:
         return Decimal(0)
     if a["periods"] is not None and a["rate"] is not None:
@@ -261,13 +263,33 @@ def _current_portion(a: dict, horizon: date) -> Decimal:
     return Decimal(0)
 
 
+def _to_twd(amount: Decimal, currency: str, fx: Decimal | None) -> Decimal | None:
+    if currency == "USD":
+        return amount * fx if fx is not None else None
+    return amount
+
+
 def get_summary(user_id: str) -> dict:
     positions, missing, _ = _position_state(user_id)
     with get_conn() as conn:
         accounts = _account_rows(conn, user_id)
-    assets = sum((a["balance"] for a in accounts if a["kind"] == "asset"), Decimal(0))
-    liabilities = sum((a["balance"] for a in accounts if a["kind"] == "liability"), Decimal(0))
+    has_us_accounts = any(a["currency"] == "USD" for a in accounts)
+    fx = Decimal(str(get_usd_twd())) if has_us_accounts else None
+    for a in accounts:
+        if a["currency"] == "USD" and fx is None and a["balance"] != 0:
+            missing.append(a["name"])  # 有餘額但無匯率：不入總額，標示不完整
+    assets = sum(
+        (v for a in accounts if a["kind"] == "asset"
+         for v in [_to_twd(a["balance"], a["currency"], fx)] if v is not None),
+        Decimal(0),
+    )
+    liabilities = sum(
+        (v for a in accounts if a["kind"] == "liability"
+         for v in [_to_twd(a["balance"], a["currency"], fx)] if v is not None),
+        Decimal(0),
+    )
     stock_value = sum((p["market_value_twd"] for p in positions if p["market_value_twd"] is not None), Decimal(0))
+    cost_total = sum((p["cost_twd"] for p in positions if p["cost_twd"] is not None), Decimal(0))
     net_exposure = sum((p["exposure"] for p in positions if p["exposure"] is not None), Decimal(0))
     gross_exposure = sum((abs(p["exposure"]) for p in positions if p["exposure"] is not None), Decimal(0))
     net_worth = assets + stock_value - liabilities
@@ -275,7 +297,8 @@ def get_summary(user_id: str) -> dict:
     # 流動負債：優先用期數+利率算攤銷月付×12；沒填期數才回退到期日全有全無
     horizon = date.today() + timedelta(days=365)
     current_liabilities = sum(
-        (_current_portion(a, horizon) for a in accounts if a["kind"] == "liability"),
+        (v for a in accounts if a["kind"] == "liability"
+         for v in [_to_twd(_current_portion(a, horizon), a["currency"], fx)] if v is not None),
         Decimal(0),
     )
     return {
@@ -283,10 +306,12 @@ def get_summary(user_id: str) -> dict:
         "assets_total": assets,
         "liabilities_total": liabilities,
         "stock_value": stock_value,
+        "cost_total": cost_total,
         "net_exposure": net_exposure,
         "gross_exposure": gross_exposure,
         "exposure_ratio": (net_exposure / net_worth) if net_worth > 0 else None,
         "debt_ratio": (liabilities / total_assets) if total_assets > 0 else None,
+        "current_liabilities": current_liabilities,
         "current_ratio": (total_assets / current_liabilities) if current_liabilities > 0 else None,
         "incomplete": bool(missing),
         "missing_symbols": missing,
@@ -296,19 +321,21 @@ def get_summary(user_id: str) -> dict:
 def list_accounts(user_id: str) -> list[dict]:
     with get_conn() as conn:
         rows = _account_rows(conn, user_id)
-    return [dict(r) for r in rows]
+    fx = Decimal(str(get_usd_twd())) if any(r["currency"] == "USD" for r in rows) else None
+    return [{**dict(r), "balance_twd": _to_twd(r["balance"], r["currency"], fx)} for r in rows]
 
 
 def create_account(
     user_id: str, name: str, kind: str,
     initial_balance: Decimal, rate: Decimal | None, due_date, periods: int | None = None,
+    currency: str = "TWD",
 ) -> dict:
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO portfolio_accounts (user_id, name, kind, sort_order, rate, due_date, periods) "
-            "VALUES (%s, %s, %s, (SELECT COALESCE(MAX(sort_order),0)+1 FROM portfolio_accounts WHERE user_id = %s), %s, %s, %s) "
+            "INSERT INTO portfolio_accounts (user_id, name, kind, sort_order, rate, due_date, periods, currency) "
+            "VALUES (%s, %s, %s, (SELECT COALESCE(MAX(sort_order),0)+1 FROM portfolio_accounts WHERE user_id = %s), %s, %s, %s, %s) "
             "RETURNING id",
-            (user_id, name, kind, user_id, rate, due_date, periods),
+            (user_id, name, kind, user_id, rate, due_date, periods, currency),
         )
         account_id = cur.fetchone()["id"]
         if initial_balance:
@@ -323,6 +350,7 @@ def create_account(
 def update_account(
     user_id: str, account_id: int, name: str | None, sort_order: int | None,
     rate: Decimal | None = None, due_date=None, periods: int | None = None,
+    currency: str | None = None,
 ) -> dict:
     with get_conn() as conn:
         _require_account(conn, account_id, user_id)
@@ -336,8 +364,10 @@ def update_account(
             conn.execute("UPDATE portfolio_accounts SET due_date = %s WHERE id = %s AND user_id = %s", (due_date, account_id, user_id))
         if periods is not None:
             conn.execute("UPDATE portfolio_accounts SET periods = %s WHERE id = %s AND user_id = %s", (periods, account_id, user_id))
+        if currency is not None:
+            conn.execute("UPDATE portfolio_accounts SET currency = %s WHERE id = %s AND user_id = %s", (currency, account_id, user_id))
         row = conn.execute(
-            "SELECT id, name, kind, sort_order, rate, due_date, periods FROM portfolio_accounts WHERE id = %s", (account_id,)
+            "SELECT id, name, kind, sort_order, rate, due_date, periods, currency FROM portfolio_accounts WHERE id = %s", (account_id,)
         ).fetchone()
         return dict(row)
 

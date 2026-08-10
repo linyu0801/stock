@@ -3,10 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getPortfolioTransactions,
   deletePortfolioTransaction,
+  updatePortfolioTransaction,
   type PortfolioTransaction,
   type PortfolioSide,
 } from "@taiwan-stock/api-client";
-import { Pencil, Search, Trash2 } from "lucide-react";
+import { Check, Pencil, Search, Trash2 } from "lucide-react";
 import { formatPrice } from "@/shared/lib/format";
 import { Button } from "@/shared/ui/atoms/button";
 import { Input } from "@/shared/ui/atoms/input";
@@ -59,6 +60,11 @@ export const TransactionsPanel: React.FC = () => {
       setDeleteTarget(null);
     },
   });
+  const confirmMutation = useMutation({
+    mutationFn: (id: number) => updatePortfolioTransaction(id, { pending: false }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["portfolio"] }),
+  });
+  const pendingCount = (data ?? []).filter(t => t.pending).length;
 
   const kw = keyword.trim().toUpperCase();
   const filtered = (data ?? []).filter(t =>
@@ -69,8 +75,11 @@ export const TransactionsPanel: React.FC = () => {
   return (
     <div className="bg-card border border-border rounded-xl flex flex-col">
       <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">交易紀錄</h2>
-        <Button size="xs" onClick={() => setModalTarget("new")}>＋新增交易</Button>
+        <div className="flex items-baseline gap-2">
+          <h2 className="text-sm font-semibold">交易紀錄</h2>
+          {pendingCount > 0 && <span className="text-xs text-primary">{pendingCount} 筆待確認</span>}
+        </div>
+        <Button size="xs" title="新增交易" onClick={() => setModalTarget("new")}>＋新增交易</Button>
       </div>
 
       <div className="px-4 py-2.5 border-b border-border flex flex-col gap-2">
@@ -120,6 +129,7 @@ export const TransactionsPanel: React.FC = () => {
                   <div className="flex items-baseline gap-1.5">
                     <span className="font-mono font-semibold">{t.symbol}</span>
                     <span className="text-xs text-muted-foreground">{label}</span>
+                    {t.pending && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">估算待確認</span>}
                   </div>
                   <div className="text-xs text-muted-foreground truncate">
                     {subText(t)} · {t.traded_at}{t.note ? ` · ${t.note}` : ""}
@@ -127,10 +137,15 @@ export const TransactionsPanel: React.FC = () => {
                 </div>
                 <span className="text-xs tabular-nums shrink-0">{impact == null ? "—" : formatPrice(impact)}</span>
                 <div className="flex shrink-0">
-                  <Button size="icon-xs" variant="ghost" aria-label="編輯" onClick={() => setModalTarget(t)}>
+                  {t.pending && (
+                    <Button size="icon-xs" variant="ghost" aria-label="確認" title="確認此估算交易（改為正式）" onClick={() => confirmMutation.mutate(t.id)}>
+                      <Check />
+                    </Button>
+                  )}
+                  <Button size="icon-xs" variant="ghost" aria-label="編輯" title="編輯交易" onClick={() => setModalTarget(t)}>
                     <Pencil />
                   </Button>
-                  <Button size="icon-xs" variant="ghost" aria-label="刪除" onClick={() => setDeleteTarget(t)}>
+                  <Button size="icon-xs" variant="ghost" aria-label="刪除" title="刪除交易" onClick={() => setDeleteTarget(t)}>
                     <Trash2 />
                   </Button>
                 </div>

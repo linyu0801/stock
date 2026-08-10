@@ -3,6 +3,7 @@ import { SummaryCards } from "./organisms/SummaryCards";
 import { PositionsTable } from "./organisms/PositionsTable";
 import { AccountsPanel } from "./organisms/AccountsPanel";
 import { TransactionsPanel } from "./organisms/TransactionsPanel";
+import { RecurringPlansPanel } from "./organisms/RecurringPlansPanel";
 
 const PortfolioPage: React.FC = () => {
   const { session, loading } = useSession();
@@ -17,6 +18,7 @@ const PortfolioPage: React.FC = () => {
         <AccountsPanel />
         <TransactionsPanel />
       </div>
+      <RecurringPlansPanel />
     </div>
   );
 };

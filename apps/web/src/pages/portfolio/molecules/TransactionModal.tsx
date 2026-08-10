@@ -71,6 +71,7 @@ export const TransactionModal: React.FC<Props> = ({ open, onClose, initial }) =>
         account_id: accountId,
         traded_at: tradedAt,
         note: note.trim() || null,
+        ...(initial?.pending ? { pending: false } : {}), // 編輯估算交易＝確認
       };
       return initial ? updatePortfolioTransaction(initial.id, payload) : createPortfolioTransaction(payload);
     },

@@ -56,8 +56,38 @@ export const PortfolioTransactionSchema = z.object({
   account_id: z.number().nullable(),
   traded_at: z.string(),
   note: z.string().nullable(),
+  plan_id: z.number().nullable(),
+  pending: z.boolean(),
 });
 export type PortfolioTransaction = z.infer<typeof PortfolioTransactionSchema>;
+
+export const RecurringFeeModeSchema = z.enum(["none", "fixed", "rate"]);
+export type RecurringFeeMode = z.infer<typeof RecurringFeeModeSchema>;
+
+export const RecurringPlanSchema = z.object({
+  id: z.number(),
+  symbol: z.string(),
+  name: z.string().optional(), // PATCH 回傳不帶 name（無 join）；list 一定有
+  account_id: z.number(),
+  amount: z.number(),
+  fee_mode: RecurringFeeModeSchema,
+  fee_value: z.number(),
+  fee_min: z.number(),
+  days_of_month: z.array(z.number()),
+  next_run_date: z.string(),
+  active: z.boolean(),
+});
+export type RecurringPlan = z.infer<typeof RecurringPlanSchema>;
+
+export type RecurringPlanInput = {
+  symbol: string;
+  account_id: number;
+  amount: number;
+  fee_mode?: RecurringFeeMode;
+  fee_value?: number;
+  fee_min?: number;
+  days_of_month: number[];
+};
 
 export const PortfolioAccountSchema = z.object({
   id: z.number(),
@@ -93,4 +123,5 @@ export type TransactionInput = {
   account_id: number | null;
   traded_at: string;
   note?: string | null;
+  pending?: boolean;
 };

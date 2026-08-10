@@ -11,8 +11,10 @@ import {
   PositionsResponseSchema, PositionsResponse,
   PortfolioTransactionSchema, PortfolioTransaction,
   PortfolioAccountSchema, PortfolioAccount,
+  RecurringPlanSchema, RecurringPlan,
   TransactionInput,
   AccountInput,
+  RecurringPlanInput,
 } from "./schemas/portfolio";
 
 const BASE = `${import.meta.env.VITE_API_BASE ?? "http://localhost:8000"}/api`;
@@ -303,6 +305,31 @@ export const addAccountEntry = (accountId: number, kind: "deposit" | "withdraw" 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ kind, amount, note }),
   });
+
+export const getRecurringPlans = (): Promise<RecurringPlan[]> =>
+  apiFetch(z.array(RecurringPlanSchema), `${BASE}/portfolio/plans`);
+
+export const createRecurringPlan = (input: RecurringPlanInput): Promise<{ id: number }> =>
+  apiFetch(z.object({ id: z.number() }), `${BASE}/portfolio/plans`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+export const updateRecurringPlan = (
+  id: number,
+  patch: Partial<RecurringPlanInput> & { active?: boolean },
+): Promise<RecurringPlan> =>
+  apiFetch(RecurringPlanSchema, `${BASE}/portfolio/plans/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+
+export const deleteRecurringPlan = async (id: number): Promise<void> => {
+  const res = await fetch(`${BASE}/portfolio/plans/${id}`, { method: "DELETE", headers: await authHeaders() });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+};
 
 export const setLeverage = (symbol: string, factor: number) =>
   apiFetch(z.object({ symbol: z.string(), factor: z.number() }), `${BASE}/portfolio/leverage/${symbol}`, {

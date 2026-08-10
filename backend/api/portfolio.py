@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import Decimal
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
@@ -35,6 +35,7 @@ class TransactionUpdate(BaseModel):
     account_id: Optional[int] = None
     traded_at: Optional[date] = None
     note: Optional[str] = None
+    pending: Optional[bool] = None
 
 
 class AccountCreate(BaseModel):
@@ -64,6 +65,31 @@ class EntryCreate(BaseModel):
 
 class LeverageSet(BaseModel):
     factor: Decimal
+
+
+FeeMode = Literal["none", "fixed", "rate"]
+Day = Annotated[int, Field(ge=1, le=31)]
+
+
+class PlanCreate(BaseModel):
+    symbol: str
+    account_id: int
+    amount: Decimal = Field(gt=0)
+    fee_mode: FeeMode = "none"
+    fee_value: Decimal = Field(ge=0, default=Decimal(0))
+    fee_min: Decimal = Field(ge=0, default=Decimal(0))
+    days_of_month: list[Day] = Field(min_length=1)
+
+
+class PlanUpdate(BaseModel):
+    symbol: Optional[str] = None
+    account_id: Optional[int] = None
+    amount: Optional[Decimal] = Field(gt=0, default=None)
+    fee_mode: Optional[FeeMode] = None
+    fee_value: Optional[Decimal] = Field(ge=0, default=None)
+    fee_min: Optional[Decimal] = Field(ge=0, default=None)
+    days_of_month: Optional[list[Day]] = Field(min_length=1, default=None)
+    active: Optional[bool] = None
 
 
 @router.get("/summary")
@@ -134,3 +160,26 @@ def set_leverage(symbol: str, body: LeverageSet, user_id: str = Depends(get_curr
 @router.delete("/leverage/{symbol}", status_code=204)
 def clear_leverage(symbol: str, user_id: str = Depends(get_current_user)):
     portfolio.clear_leverage(user_id, symbol)
+
+
+@router.get("/plans")
+def list_plans(user_id: str = Depends(get_current_user)):
+    return portfolio.list_plans(user_id)
+
+
+@router.post("/plans", status_code=201)
+def create_plan(body: PlanCreate, user_id: str = Depends(get_current_user)):
+    return portfolio.create_plan(
+        user_id, body.symbol, body.account_id, body.amount,
+        body.fee_mode, body.fee_value, body.fee_min, body.days_of_month,
+    )
+
+
+@router.patch("/plans/{plan_id}")
+def update_plan(plan_id: int, body: PlanUpdate, user_id: str = Depends(get_current_user)):
+    return portfolio.update_plan(user_id, plan_id, **body.model_dump(exclude_unset=True))
+
+
+@router.delete("/plans/{plan_id}", status_code=204)
+def delete_plan(plan_id: int, user_id: str = Depends(get_current_user)):
+    portfolio.delete_plan(user_id, plan_id)

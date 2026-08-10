@@ -123,4 +123,30 @@ def init_db() -> None:
                 factor  NUMERIC NOT NULL,
                 PRIMARY KEY (user_id, symbol)
             );
+            CREATE TABLE IF NOT EXISTS portfolio_recurring_plans (
+                id            INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                user_id       UUID    NOT NULL,
+                symbol        TEXT    NOT NULL,
+                account_id    INTEGER NOT NULL REFERENCES portfolio_accounts(id) ON DELETE CASCADE,
+                amount        NUMERIC   NOT NULL,
+                fee_mode      TEXT      NOT NULL DEFAULT 'none' CHECK (fee_mode IN ('none','fixed','rate')),
+                fee_value     NUMERIC   NOT NULL DEFAULT 0,
+                fee_min       NUMERIC   NOT NULL DEFAULT 0,
+                days_of_month INTEGER[] NOT NULL,
+                next_run_date DATE      NOT NULL,
+                active        BOOLEAN   NOT NULL DEFAULT TRUE
+            );
+            CREATE INDEX IF NOT EXISTS portfolio_plans_user_idx ON portfolio_recurring_plans(user_id);
+            DO $$
+            BEGIN
+              IF EXISTS (SELECT 1 FROM information_schema.columns
+                         WHERE table_name = 'portfolio_recurring_plans' AND column_name = 'day_of_month') THEN
+                ALTER TABLE portfolio_recurring_plans ADD COLUMN IF NOT EXISTS days_of_month INTEGER[];
+                UPDATE portfolio_recurring_plans SET days_of_month = ARRAY[day_of_month] WHERE days_of_month IS NULL;
+                ALTER TABLE portfolio_recurring_plans ALTER COLUMN days_of_month SET NOT NULL;
+                ALTER TABLE portfolio_recurring_plans DROP COLUMN day_of_month;
+              END IF;
+            END $$;
+            ALTER TABLE portfolio_transactions ADD COLUMN IF NOT EXISTS plan_id INTEGER REFERENCES portfolio_recurring_plans(id) ON DELETE SET NULL;
+            ALTER TABLE portfolio_transactions ADD COLUMN IF NOT EXISTS pending BOOLEAN NOT NULL DEFAULT FALSE;
         """)

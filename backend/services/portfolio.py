@@ -1,10 +1,12 @@
+import calendar
 import re
-from datetime import date, timedelta
+import time
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from fastapi import HTTPException
 
 from db import get_conn
-from services.fetcher import get_batch_prices, get_usd_twd, is_us_symbol
+from services.fetcher import download_history, get_batch_prices, get_usd_twd, is_us_symbol
 
 _LEV_2X = re.compile(r"^\d+L$")
 _LEV_INV = re.compile(r"^\d+R$")
@@ -66,7 +68,7 @@ def _replay(rows: list[dict]) -> dict[str, dict]:
 
 
 def _fetch_txs(conn, user_id: str, symbol: str | None = None) -> list[dict]:
-    sql = ("SELECT id, symbol, side, quantity, price, fee, tax, account_id, traded_at, note "
+    sql = ("SELECT id, symbol, side, quantity, price, fee, tax, account_id, traded_at, note, plan_id, pending "
            "FROM portfolio_transactions WHERE user_id = %s")
     params: list = [user_id]
     if symbol is not None:
@@ -120,7 +122,7 @@ def create_transaction(user_id: str, data: dict) -> dict:
 def update_transaction(user_id: str, tx_id: int, data: dict) -> dict:
     with get_conn() as conn:
         old = conn.execute(
-            "SELECT id, symbol, side, quantity, price, fee, tax, account_id, traded_at, note "
+            "SELECT id, symbol, side, quantity, price, fee, tax, account_id, traded_at, note, plan_id, pending "
             "FROM portfolio_transactions WHERE id = %s AND user_id = %s",
             (tx_id, user_id),
         ).fetchone()
@@ -136,9 +138,9 @@ def update_transaction(user_id: str, tx_id: int, data: dict) -> dict:
             _replay(rows)
         conn.execute(
             "UPDATE portfolio_transactions SET symbol=%s, side=%s, quantity=%s, price=%s, fee=%s, tax=%s, "
-            "account_id=%s, traded_at=%s, note=%s WHERE id=%s",
+            "account_id=%s, traded_at=%s, note=%s, pending=%s WHERE id=%s",
             (merged["symbol"], merged["side"], merged["quantity"], merged["price"], merged["fee"],
-             merged["tax"], merged["account_id"], merged["traded_at"], merged["note"], tx_id),
+             merged["tax"], merged["account_id"], merged["traded_at"], merged["note"], merged["pending"], tx_id),
         )
         conn.execute("DELETE FROM portfolio_cash_entries WHERE transaction_id = %s", (tx_id,))
         _insert_linked_entry(conn, user_id, merged, tx_id)
@@ -270,6 +272,7 @@ def _to_twd(amount: Decimal, currency: str, fx: Decimal | None) -> Decimal | Non
 
 
 def get_summary(user_id: str) -> dict:
+    run_due_plans(user_id)  # 惰性補算：portfolio 頁必打 summary，於此補齊到期的定期定額
     positions, missing, _ = _position_state(user_id)
     with get_conn() as conn:
         accounts = _account_rows(conn, user_id)
@@ -411,3 +414,227 @@ def clear_leverage(user_id: str, symbol: str) -> None:
         )
         if cur.rowcount == 0:
             raise HTTPException(404, "no override")
+
+
+# ── 定期定額 ──────────────────────────────────────────────
+
+_TPE = timezone(timedelta(hours=8))  # 台灣恆 UTC+8、無日光節約 → 固定偏移，免 tzdata
+
+
+def _today() -> date:
+    return datetime.now(_TPE).date()
+
+
+def _clamp_day(year: int, month: int, day: int) -> date:
+    last = calendar.monthrange(year, month)[1]
+    return date(year, month, min(day, last))  # 小月無此日（如 2 月的 31）→ 當月最後一天
+
+
+def _next_on_or_after(days: list[int], ref: date) -> date:
+    """days（每月扣款日 1–31）內、日期 ≥ ref 的最早一天；當月排完取下月最小日；缺日以月底代替。"""
+    for d in sorted(set(days)):
+        cand = _clamp_day(ref.year, ref.month, d)
+        if cand >= ref:
+            return cand
+    nm_year = ref.year + (1 if ref.month == 12 else 0)
+    nm_month = 1 if ref.month == 12 else ref.month + 1
+    return _clamp_day(nm_year, nm_month, min(days))
+
+
+def _first_run(days: list[int], today: date) -> date:
+    return _next_on_or_after(days, today)
+
+
+def _advance(days: list[int], current: date) -> date:
+    return _next_on_or_after(days, current + timedelta(days=1))
+
+
+def _plan_fee(mode: str, value: Decimal, fee_min: Decimal, gross: Decimal) -> Decimal:
+    if mode == "fixed":
+        fee = value
+    elif mode == "rate":
+        fee = gross * value / 100
+    else:
+        fee = Decimal(0)
+    return max(fee, fee_min)
+
+
+_closes_cache: dict[str, tuple[float, list[tuple[date, Decimal]]]] = {}
+_CLOSES_TTL = 1800  # 30min：下市/壞代號補算失敗時，避免每次 summary 重打未快取的 Yahoo
+
+
+def _closes_by_date(symbol: str) -> list[tuple[date, Decimal]]:
+    now = time.time()
+    hit = _closes_cache.get(symbol)
+    if hit and now - hit[0] < _CLOSES_TTL:
+        return hit[1]
+    out = []
+    for b in download_history(symbol, "1y"):
+        try:
+            d = datetime.strptime(b["time"], "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            continue
+        out.append((d, Decimal(str(b["close"]))))
+    _closes_cache[symbol] = (now, out)  # download_history 回傳已按日期升冪
+    return out
+
+
+def _close_on_or_before(closes: list[tuple[date, Decimal]], target: date) -> Decimal | None:
+    pick = None
+    for d, c in closes:
+        if d <= target:
+            pick = c
+        else:
+            break
+    if pick is None and closes:
+        pick = closes[0][1]  # target 早於全部歷史 → 取最早一筆估算
+    return pick
+
+
+def run_due_plans(user_id: str) -> None:
+    """惰性補算：把 active 且 next_run_date≤today 的計劃補齊為 pending 買進交易。冪等、併發安全。"""
+    today = _today()
+    with get_conn() as conn:  # 先無鎖讀出到期 symbol，供鎖外抓價
+        symbols = {
+            r["symbol"] for r in conn.execute(
+                "SELECT symbol FROM portfolio_recurring_plans WHERE user_id = %s AND active = TRUE AND next_run_date <= %s",
+                (user_id, today),
+            ).fetchall()
+        }
+    if not symbols:
+        return
+    closes_map = {s: _closes_by_date(s) for s in symbols}  # 抓價在 conn/鎖之外
+    fx_rate = get_usd_twd()  # 供跨幣別扣款換算；快取，鎖外取
+    fx = Decimal(str(fx_rate)) if fx_rate is not None else None
+    with get_conn() as conn:
+        # FOR UPDATE OF p 只鎖計劃列：併發的第二個 summary 會等本交易 commit 後才讀到已前進的
+        # next_run_date，避免同一期被兩個請求各插一筆。抓價已在鎖外完成。
+        plans = conn.execute(
+            "SELECT p.id, p.symbol, p.account_id, p.amount, p.fee_mode, p.fee_value, p.fee_min, "
+            "p.days_of_month, p.next_run_date, a.currency AS account_currency "
+            "FROM portfolio_recurring_plans p JOIN portfolio_accounts a ON a.id = p.account_id "
+            "WHERE p.user_id = %s AND p.active = TRUE AND p.next_run_date <= %s "
+            "ORDER BY p.id FOR UPDATE OF p",
+            (user_id, today),
+        ).fetchall()
+        for plan in plans:
+            closes = closes_map.get(plan["symbol"])
+            if closes is None:
+                continue  # 兩次讀之間新出現的計劃：本輪略過，下次 summary 補
+            sym_ccy = "USD" if is_us_symbol(plan["symbol"]) else "TWD"
+            acc_ccy = plan["account_currency"]
+            days = plan["days_of_month"]
+            run_date = plan["next_run_date"]
+            while run_date <= today:
+                price = _close_on_or_before(closes, run_date)
+                if price is None or price <= 0:
+                    break  # 抓不到價：這期不建，next_run_date 不前進，下次 summary 再補
+                fee = _plan_fee(plan["fee_mode"], plan["fee_value"], plan["fee_min"], plan["amount"])
+                qty = plan["amount"] / price
+                gross = qty * price + fee  # 標的幣別的成交總額（含手續費）
+                # 扣款帳戶幣別 ≠ 標的幣別 → 換算成帳戶幣別後扣款（如 USD 標的、TWD 帳戶）
+                if sym_ccy == acc_ccy:
+                    cash = -gross
+                elif fx is None:
+                    break  # 跨幣別但拿不到匯率：這期不建，下次再補
+                elif sym_ccy == "USD":
+                    cash = -(gross * fx)
+                else:
+                    cash = -(gross / fx)
+                cur = conn.execute(
+                    "INSERT INTO portfolio_transactions "
+                    "(user_id, symbol, side, quantity, price, fee, tax, account_id, traded_at, note, plan_id, pending) "
+                    "VALUES (%s, %s, 'buy', %s, %s, %s, 0, %s, %s, %s, %s, TRUE) RETURNING id",
+                    (user_id, plan["symbol"], qty, price, fee, plan["account_id"], run_date, "定期定額（估算）", plan["id"]),
+                )
+                tx_id = cur.fetchone()["id"]
+                conn.execute(
+                    "INSERT INTO portfolio_cash_entries (user_id, account_id, kind, amount, transaction_id, entry_date) "
+                    "VALUES (%s, %s, 'trade', %s, %s, %s)",
+                    (user_id, plan["account_id"], cash, tx_id, run_date),
+                )
+                run_date = _advance(days, run_date)
+            if run_date != plan["next_run_date"]:
+                conn.execute(
+                    "UPDATE portfolio_recurring_plans SET next_run_date = %s WHERE id = %s",
+                    (run_date, plan["id"]),
+                )
+
+
+def list_plans(user_id: str) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT p.id, p.symbol, m.name, p.account_id, p.amount, p.fee_mode, p.fee_value, p.fee_min, "
+            "p.days_of_month, p.next_run_date, p.active "
+            "FROM portfolio_recurring_plans p LEFT JOIN stocks_meta m ON m.symbol = p.symbol "
+            "WHERE p.user_id = %s ORDER BY p.id",
+            (user_id,),
+        ).fetchall()
+    return [{**dict(r), "name": r["name"] or r["symbol"]} for r in rows]
+
+
+def create_plan(
+    user_id: str, symbol: str, account_id: int, amount: Decimal,
+    fee_mode: str, fee_value: Decimal, fee_min: Decimal, days_of_month: list[int],
+) -> dict:
+    with get_conn() as conn:
+        _require_account(conn, account_id, user_id)
+        next_run = _first_run(days_of_month, _today())
+        cur = conn.execute(
+            "INSERT INTO portfolio_recurring_plans "
+            "(user_id, symbol, account_id, amount, fee_mode, fee_value, fee_min, days_of_month, next_run_date) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            (user_id, symbol, account_id, amount, fee_mode, fee_value, fee_min, sorted(set(days_of_month)), next_run),
+        )
+        return {"id": cur.fetchone()["id"]}
+
+
+def update_plan(
+    user_id: str, plan_id: int, *, symbol=None, account_id=None, amount=None,
+    fee_mode=None, fee_value=None, fee_min=None, days_of_month=None, active=None,
+) -> dict:
+    if days_of_month is not None:
+        days_of_month = sorted(set(days_of_month))
+    with get_conn() as conn:
+        old = conn.execute(
+            "SELECT days_of_month, active "
+            "FROM portfolio_recurring_plans WHERE id = %s AND user_id = %s", (plan_id, user_id),
+        ).fetchone()
+        if old is None:
+            raise HTTPException(404, "plan not found")
+        if account_id is not None:
+            _require_account(conn, account_id, user_id)
+        sets, params = [], []
+        for col, val in (
+            ("symbol", symbol), ("account_id", account_id), ("amount", amount),
+            ("fee_mode", fee_mode), ("fee_value", fee_value), ("fee_min", fee_min),
+            ("days_of_month", days_of_month), ("active", active),
+        ):
+            if val is not None:
+                sets.append(f"{col} = %s")  # col 為常數欄名，非外部輸入
+                params.append(val)
+        # 改扣款日、或由暫停重新啟用 → 重設下次執行日為今起最近的該日，避免回補整段暫停期
+        reactivated = active is True and old["active"] is False
+        if days_of_month is not None or reactivated:
+            eff_days = days_of_month if days_of_month is not None else old["days_of_month"]
+            sets.append("next_run_date = %s")
+            params.append(_first_run(eff_days, _today()))
+        if sets:
+            params.extend([plan_id, user_id])
+            conn.execute(
+                f"UPDATE portfolio_recurring_plans SET {', '.join(sets)} WHERE id = %s AND user_id = %s", params
+            )
+        row = conn.execute(
+            "SELECT id, symbol, account_id, amount, fee_mode, fee_value, fee_min, days_of_month, next_run_date, active "
+            "FROM portfolio_recurring_plans WHERE id = %s AND user_id = %s", (plan_id, user_id),
+        ).fetchone()
+        return dict(row)
+
+
+def delete_plan(user_id: str, plan_id: int) -> None:
+    with get_conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM portfolio_recurring_plans WHERE id = %s AND user_id = %s", (plan_id, user_id)
+        )  # 已建的 pending 交易靠 plan_id ON DELETE SET NULL 保留，仍可確認
+        if cur.rowcount == 0:
+            raise HTTPException(404, "plan not found")

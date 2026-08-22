@@ -30,11 +30,11 @@ export const StockSearchCombobox: React.FC<Props> = ({ onSelect, placeholder = "
       try {
         const data = await searchStocks(text);
         setResults(data);
-        setOpen(data.length > 0);
+        setOpen(true);  // 0 筆也開，顯示「查無結果」而不是靜默沒反應
       } catch {
         setResults([]); setOpen(false);
       }
-    }, 200);
+    }, 300);  // 本地查無時會 fallback 打 Yahoo，debounce 拉長避免逐字觸發外呼
     return () => { if (timer.current) clearTimeout(timer.current); };
   }, [text]);
 
@@ -79,18 +79,22 @@ export const StockSearchCombobox: React.FC<Props> = ({ onSelect, placeholder = "
         <ul className={`absolute left-0 right-0 z-50 rounded-lg border border-border bg-popover shadow-lg overflow-hidden list-none p-0 m-0
           ${dropUp ? "bottom-full mb-1" : "top-full mt-1"}`}
         >
-          {results.map(r => (
-            <li key={r.symbol}>
-              <button
-                type="button"
-                onMouseDown={e => { e.preventDefault(); select(r.symbol); }}
-                className="flex w-full items-center gap-3 px-3 py-2 text-sm text-left hover:bg-accent transition-colors"
-              >
-                <span className="font-mono font-semibold text-foreground">{r.symbol}</span>
-                <span className="text-muted-foreground">{r.name}</span>
-              </button>
-            </li>
-          ))}
+          {results.length === 0 ? (
+            <li className="px-3 py-2 text-sm text-muted-foreground">查無結果</li>
+          ) : (
+            results.map(r => (
+              <li key={r.symbol}>
+                <button
+                  type="button"
+                  onMouseDown={e => { e.preventDefault(); select(r.symbol); }}
+                  className="flex w-full items-center gap-3 px-3 py-2 text-sm text-left hover:bg-accent transition-colors"
+                >
+                  <span className="font-mono font-semibold text-foreground">{r.symbol}</span>
+                  <span className="text-muted-foreground">{r.name}</span>
+                </button>
+              </li>
+            ))
+          )}
         </ul>
       )}
     </div>

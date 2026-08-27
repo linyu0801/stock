@@ -54,11 +54,12 @@ def _resolve_yahoo_symbol(symbol: str) -> str | None:
             continue
     return None
 
-def download_history(symbol: str, period: str) -> list[dict[str, Any]]:
+def _chart(symbol: str, period: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """回傳 (meta, bars)。meta 帶即時報價，日 K 尾端有時要隔天才補上 close（見 get_batch_prices）。"""
     yahoo_sym = _resolve_yahoo_symbol(symbol)
     if not yahoo_sym:
         print(f"[fetcher] {symbol} not found on Yahoo (.TW / .TWO both failed)")
-        return []
+        return {}, []
     intraday = period in ("1d", "3d")
     # Yahoo 沒有 3d range：抓 5d 再裁掉多的交易日
     yahoo_range = "5d" if period == "3d" else period
@@ -66,13 +67,14 @@ def download_history(symbol: str, period: str) -> list[dict[str, Any]]:
         data = _yahoo_get(yahoo_sym, f"range={yahoo_range}&interval={'5m' if intraday else '1d'}")
     except Exception as e:
         print(f"[fetcher] {symbol} history failed: {e}")
-        return []
+        return {}, []
 
     result = data.get("chart", {}).get("result") or []
     if not result:
-        return []
+        return {}, []
 
     r = result[0]
+    meta = r.get("meta") or {}
     timestamps = r.get("timestamp", [])
     quote = (r.get("indicators", {}).get("quote") or [{}])[0]
     opens   = quote.get("open",   [])
@@ -108,23 +110,45 @@ def download_history(symbol: str, period: str) -> list[dict[str, Any]]:
         while len(bars) >= 2 and bars[-1]["volume"] == 0 and bars[-1]["close"] == bars[-2]["close"]:
             bars.pop()
 
-    return bars
+    return meta, bars
+
+
+def download_history(symbol: str, period: str) -> list[dict[str, Any]]:
+    return _chart(symbol, period)[1]
+
+def _quote(meta: dict[str, Any], bars: list[dict[str, Any]]) -> tuple[float, float, int] | None:
+    """(收盤, 基準價, 成交量)。價量取 meta 的即時報價；基準價取當日之前最後一根日 K。
+
+    日 K 尾端的 close 可能是 null（Yahoo 合併延遲，實測 2026-08-26/27），
+    那幾天會整根被 _chart 丟掉，只靠 bars 相減會拿到過期好幾天的價。
+    """
+    price, ts = meta.get("regularMarketPrice"), meta.get("regularMarketTime")
+    if price is None or ts is None:
+        if len(bars) < 2:
+            return None
+        return bars[-1]["close"], bars[-2]["close"], bars[-1]["volume"]
+    today = datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d")
+    prior = [b for b in bars if b["time"] < today]
+    close = round(float(price), 2)
+    prev_close = prior[-1]["close"] if prior else close  # 無前一根（新上市）→ 漲跌 0
+    return close, prev_close, int(meta.get("regularMarketVolume") or 0)
+
 
 def get_stock_info(symbol: str) -> dict[str, Any] | None:
-    bars = download_history(symbol, "5d")
-    if len(bars) < 2:
+    quote = _quote(*_chart(symbol, "5d"))
+    if quote is None:
         return None
-    latest, prev = bars[-1], bars[-2]
-    change_pct = (latest["close"] - prev["close"]) / prev["close"] * 100
+    close, prev_close, _ = quote
+    change_pct = (close - prev_close) / prev_close * 100 if prev_close else 0.0
     with get_conn() as conn:
         row = conn.execute("SELECT name FROM stocks_meta WHERE symbol = %s", (symbol,)).fetchone()
     name = row["name"] if row else symbol
     return {
         "symbol":     symbol,
         "name":       name,
-        "close":      latest["close"],
+        "close":      close,
         "change_pct": round(change_pct, 2),
-        "limit":      limit_status(latest["close"], prev["close"]),
+        "limit":      limit_status(close, prev_close),
     }
 
 def _fetch_prices_from_yahoo(symbols: list[str]) -> list[dict[str, Any]]:
@@ -136,21 +160,20 @@ def _fetch_prices_from_yahoo(symbols: list[str]) -> list[dict[str, Any]]:
     name_map = {r["symbol"]: r["name"] for r in rows}
 
     def _fetch_one(sym: str) -> dict[str, Any] | None:
-        bars = download_history(sym, "5d")
-        if not bars:
+        quote = _quote(*_chart(sym, "5d"))
+        if quote is None:
             return None
-        latest = bars[-1]
-        prev_close = bars[-2]["close"] if len(bars) >= 2 else latest["close"]
-        change_abs = round(latest["close"] - prev_close, 2)
+        close, prev_close, volume = quote
+        change_abs = round(close - prev_close, 2)
         change_pct = round(change_abs / prev_close * 100, 2) if prev_close != 0 else 0.0
         return {
             "symbol":     sym,
             "name":       name_map.get(sym, sym),
-            "close":      latest["close"],
+            "close":      close,
             "change":     change_abs,
             "change_pct": change_pct,
-            "volume":     latest["volume"],
-            "limit":      limit_status(latest["close"], prev_close),
+            "volume":     volume,
+            "limit":      limit_status(close, prev_close),
         }
 
     results = []

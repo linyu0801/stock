@@ -64,6 +64,7 @@ export const SummaryCards: React.FC = () => {
   }
 
   const totalAssets = data.assets_total + data.stock_value;
+  const stockShare = totalAssets > 0 ? Math.round((data.stock_value / totalAssets) * 100) : null;
 
   const allocation: Segment[] = [
     { key: "cash", label: "現金與其他", value: data.assets_total, colorClass: "bg-cat-cash" },
@@ -106,7 +107,14 @@ export const SummaryCards: React.FC = () => {
         />
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-border">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-4 border-t border-border">
+        <Ratio
+          label="資金比例"
+          title="股票市值與現金的配置比例；現金為所有資產科目合計（含外幣換算）"
+          value={stockShare == null ? "—" : `${stockShare} : ${100 - stockShare}`}
+          formula="股票 : 現金"
+          calc={`${formatPrice(data.stock_value)} : ${formatPrice(data.assets_total)}`}
+        />
         <Ratio
           label="資產負債比"
           value={pct(data.debt_ratio, 1)}

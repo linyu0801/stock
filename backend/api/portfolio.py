@@ -67,6 +67,11 @@ class LeverageSet(BaseModel):
     factor: Decimal
 
 
+class RebalanceSet(BaseModel):
+    target_pct: Decimal = Field(gt=0, lt=100)
+    trigger_pct: Decimal = Field(gt=0)
+
+
 FeeMode = Literal["none", "fixed", "rate"]
 Day = Annotated[int, Field(ge=1, le=31)]
 
@@ -183,3 +188,14 @@ def update_plan(plan_id: int, body: PlanUpdate, user_id: str = Depends(get_curre
 @router.delete("/plans/{plan_id}", status_code=204)
 def delete_plan(plan_id: int, user_id: str = Depends(get_current_user)):
     portfolio.delete_plan(user_id, plan_id)
+
+
+@router.get("/rebalance")
+def get_rebalance(user_id: str = Depends(get_current_user)):
+    return portfolio.get_rebalance(user_id)
+
+
+@router.put("/rebalance")
+def set_rebalance(body: RebalanceSet, user_id: str = Depends(get_current_user)):
+    portfolio.set_rebalance(user_id, body.target_pct, body.trigger_pct)
+    return portfolio.get_rebalance(user_id)

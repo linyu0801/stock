@@ -12,9 +12,11 @@ import {
   PortfolioTransactionSchema, PortfolioTransaction,
   PortfolioAccountSchema, PortfolioAccount,
   RecurringPlanSchema, RecurringPlan,
+  RebalanceSchema, Rebalance,
   TransactionInput,
   AccountInput,
   RecurringPlanInput,
+  RebalanceInput,
 } from "./schemas/portfolio";
 
 const BASE = `${import.meta.env.VITE_API_BASE ?? "http://localhost:8000"}/api`;
@@ -342,3 +344,13 @@ export const clearLeverage = async (symbol: string): Promise<void> => {
   const res = await fetch(`${BASE}/portfolio/leverage/${symbol}`, { method: "DELETE", headers: await authHeaders() });
   if (!res.ok) throw new Error(`API error ${res.status}`);
 };
+
+export const getPortfolioRebalance = (): Promise<Rebalance | null> =>
+  apiFetch(RebalanceSchema.nullable(), `${BASE}/portfolio/rebalance`);
+
+export const setPortfolioRebalance = (input: RebalanceInput): Promise<Rebalance> =>
+  apiFetch(RebalanceSchema, `${BASE}/portfolio/rebalance`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });

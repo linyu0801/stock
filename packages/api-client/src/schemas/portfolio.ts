@@ -125,3 +125,33 @@ export type TransactionInput = {
   note?: string | null;
   pending?: boolean;
 };
+
+export const RebalanceBucketSchema = z.object({
+  value: z.number(),
+  cash: z.number(),
+  base: z.number(),
+  ratio: z.number().nullable(),
+  delta: z.number(),
+  factor: z.number(),
+  exposure_after: z.number(),
+  exposure_ratio_after: z.number().nullable(),
+});
+export type RebalanceBucket = z.infer<typeof RebalanceBucketSchema>;
+
+export const RebalanceSchema = z.object({
+  target_pct: z.number(),
+  trigger_pct: z.number(),
+  upper_pct: z.number(),
+  lower_pct: z.number(),
+  net_worth: z.number(),
+  exposure: z.number(),
+  exposure_ratio: z.number().nullable(),
+  leveraged: RebalanceBucketSchema.extend({
+    implied_move_pct: z.number().nullable(),
+    triggered: z.boolean(),
+  }),
+  all_stocks: RebalanceBucketSchema,
+});
+export type Rebalance = z.infer<typeof RebalanceSchema>;
+
+export type RebalanceInput = { target_pct: number; trigger_pct: number };

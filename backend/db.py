@@ -149,4 +149,9 @@ def init_db() -> None:
             END $$;
             ALTER TABLE portfolio_transactions ADD COLUMN IF NOT EXISTS plan_id INTEGER REFERENCES portfolio_recurring_plans(id) ON DELETE SET NULL;
             ALTER TABLE portfolio_transactions ADD COLUMN IF NOT EXISTS pending BOOLEAN NOT NULL DEFAULT FALSE;
+            CREATE TABLE IF NOT EXISTS portfolio_rebalance (
+                user_id     UUID    PRIMARY KEY,
+                target_pct  NUMERIC NOT NULL,
+                trigger_pct NUMERIC NOT NULL DEFAULT 50
+            );
         """)

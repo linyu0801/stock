@@ -1,5 +1,6 @@
 import { useSession } from "@/shared/lib/use-session";
 import { SummaryCards } from "./organisms/SummaryCards";
+import { RebalancePanel } from "./organisms/RebalancePanel";
 import { PositionsTable } from "./organisms/PositionsTable";
 import { AccountsPanel } from "./organisms/AccountsPanel";
 import { TransactionsPanel } from "./organisms/TransactionsPanel";
@@ -13,6 +14,7 @@ const PortfolioPage: React.FC = () => {
     <div className="px-4 sm:px-8 py-6 max-w-6xl flex flex-col gap-6">
       <h1 className="font-display text-xl font-bold">投資組合</h1>
       <SummaryCards />
+      <RebalancePanel />
       <PositionsTable />
       <div className="grid lg:grid-cols-2 gap-6">
         <AccountsPanel />

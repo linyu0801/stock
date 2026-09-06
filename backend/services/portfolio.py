@@ -321,6 +321,100 @@ def get_summary(user_id: str) -> dict:
     }
 
 
+# ── 再平衡 ────────────────────────────────────────────────
+
+
+def _band(target: Decimal, move: Decimal) -> Decimal:
+    """標的漲跌 move（如 +0.5）後，原本站在 target 的比例會變成多少。
+
+    只有風險資產隨價格變動、現金不動，故 t(1+m) / [t(1+m) + (1-t)]。
+    價格門檻與比例門檻由此一對一對應，不必記錄上次再平衡的基準價。
+    """
+    grown = target * (1 + move)
+    return grown / (grown + (1 - target))
+
+
+def _weighted_factor(rows: list[dict]) -> Decimal:
+    mv = sum((r["market_value_twd"] for r in rows), Decimal(0))
+    return sum((r["exposure"] for r in rows), Decimal(0)) / mv if mv > 0 else Decimal(1)
+
+
+def _bucket(rows: list[dict], value: Decimal, cash: Decimal, target: Decimal,
+            exposure: Decimal, net_worth: Decimal) -> dict:
+    base = value + cash
+    delta = value - base * target  # 正=該賣、負=該買（沿用試算表的符號）
+    factor = _weighted_factor(rows)
+    # 現金與股票等額對調，淨值不變；曝險只隨買賣金額×倍數移動
+    after = exposure - delta * factor
+    return {
+        "value": value,
+        "cash": cash,
+        "base": base,
+        "ratio": value / base if base > 0 else None,
+        "delta": delta,
+        "factor": factor,
+        "exposure_after": after,
+        "exposure_ratio_after": after / net_worth if net_worth > 0 else None,
+    }
+
+
+def get_rebalance(user_id: str) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT target_pct, trigger_pct FROM portfolio_rebalance WHERE user_id = %s", (user_id,)
+        ).fetchone()
+    if row is None:
+        return None
+    target = row["target_pct"] / 100
+    trigger = row["trigger_pct"] / 100
+    positions, _, _ = _position_state(user_id)
+    with get_conn() as conn:
+        accounts = _account_rows(conn, user_id)
+    fx = Decimal(str(get_usd_twd())) if any(a["currency"] == "USD" for a in accounts) else None
+    cash = sum(
+        (v for a in accounts if a["kind"] == "asset"
+         for v in [_to_twd(a["balance"], a["currency"], fx)] if v is not None),
+        Decimal(0),
+    )
+    liabilities = sum(
+        (v for a in accounts if a["kind"] == "liability"
+         for v in [_to_twd(a["balance"], a["currency"], fx)] if v is not None),
+        Decimal(0),
+    )
+    priced = [p for p in positions if p["market_value_twd"] is not None and p["exposure"] is not None]
+    lev_rows = [p for p in priced if p["factor"] > 1]
+    stock_value = sum((p["market_value_twd"] for p in priced), Decimal(0))
+    exposure = sum((p["exposure"] for p in priced), Decimal(0))
+    net_worth = cash + stock_value - liabilities
+    lev = _bucket(lev_rows, sum((p["market_value_twd"] for p in lev_rows), Decimal(0)),
+                  cash, target, exposure, net_worth)
+    upper, lower = _band(target, trigger), _band(target, -trigger)
+    r = lev["ratio"]
+    # 由現在的比例反推「自上次再平衡以來標的漲跌幅」，是 _band 的反函數
+    implied = (r * (1 - target)) / (target * (1 - r)) - 1 if r is not None and 0 < r < 1 else None
+    return {
+        "target_pct": row["target_pct"],
+        "trigger_pct": row["trigger_pct"],
+        "upper_pct": upper * 100,
+        "lower_pct": lower * 100,
+        "net_worth": net_worth,
+        "exposure": exposure,
+        "exposure_ratio": exposure / net_worth if net_worth > 0 else None,
+        "leveraged": {**lev, "implied_move_pct": implied * 100 if implied is not None else None,
+                      "triggered": r is not None and (r >= upper or r <= lower)},
+        "all_stocks": _bucket(priced, stock_value, cash, target, exposure, net_worth),
+    }
+
+
+def set_rebalance(user_id: str, target_pct: Decimal, trigger_pct: Decimal) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO portfolio_rebalance (user_id, target_pct, trigger_pct) VALUES (%s, %s, %s) "
+            "ON CONFLICT (user_id) DO UPDATE SET target_pct = EXCLUDED.target_pct, trigger_pct = EXCLUDED.trigger_pct",
+            (user_id, target_pct, trigger_pct),
+        )
+
+
 def list_accounts(user_id: str) -> list[dict]:
     with get_conn() as conn:
         rows = _account_rows(conn, user_id)

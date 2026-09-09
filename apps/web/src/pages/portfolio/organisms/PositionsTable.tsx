@@ -218,6 +218,9 @@ export const PositionsTable: React.FC = () => {
                   <td className={`text-right px-3 py-2 tabular-nums ${p.unrealized != null ? gainLossClass(p.unrealized) : ""}`}>
                     <div>{pct == null ? "—" : formatPercent(pct)}</div>
                     {p.unrealized != null && <div className="text-xs opacity-75">{formatPrice(p.unrealized)}</div>}
+                    {p.currency === "USD" && p.unrealized_twd != null && (
+                      <div className="text-xs opacity-60">≈ {formatPrice(p.unrealized_twd)}</div>
+                    )}
                   </td>
                   <td className={`text-right px-3 py-2 tabular-nums ${gainLossClass(p.realized)}`}>{formatPrice(p.realized)}</td>
                   <td className="text-right px-3 py-2 tabular-nums">{factorCell(p)}</td>
@@ -254,6 +257,9 @@ export const PositionsTable: React.FC = () => {
               <div className={`text-right tabular-nums ${p.unrealized != null ? gainLossClass(p.unrealized) : ""}`}>
                 <div className="text-sm font-medium">{pct == null ? "—" : formatPercent(pct)}</div>
                 {p.unrealized != null && <div className="text-xs opacity-75">{formatPrice(p.unrealized)}</div>}
+                {p.currency === "USD" && p.unrealized_twd != null && (
+                  <div className="text-xs opacity-60">≈ {formatPrice(p.unrealized_twd)}</div>
+                )}
               </div>
             </li>
           );

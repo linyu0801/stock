@@ -14,6 +14,7 @@ export const PositionSchema = z.object({
   market_value_twd: z.number().nullable(),
   cost_twd: z.number().nullable(),
   unrealized: z.number().nullable(),
+  unrealized_twd: z.number().nullable(),
   realized: z.number(),
   factor: z.number(),
   factor_overridden: z.boolean(),

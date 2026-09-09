@@ -201,6 +201,11 @@ def _position_state(user_id: str) -> tuple[list[dict], list[str]]:
         else:
             mv_twd = mv
         cost_twd = p["cost"] * fx if currency == "USD" and fx is not None else (p["cost"] if currency == "TWD" else None)
+        unrealized = (mv - p["cost"]) if mv is not None else None
+        if unrealized is None or (currency == "USD" and fx is None):
+            unrealized_twd = None
+        else:
+            unrealized_twd = unrealized * fx if currency == "USD" else unrealized
         positions.append({
             "symbol": symbol,
             "name": meta.get(symbol, symbol),
@@ -211,7 +216,8 @@ def _position_state(user_id: str) -> tuple[list[dict], list[str]]:
             "market_value": mv,
             "market_value_twd": mv_twd,
             "cost_twd": cost_twd,
-            "unrealized": (mv - p["cost"]) if mv is not None else None,
+            "unrealized": unrealized,
+            "unrealized_twd": unrealized_twd,
             "realized": p["realized"],
             "factor": factor,
             "factor_overridden": symbol in overrides,
@@ -221,14 +227,9 @@ def _position_state(user_id: str) -> tuple[list[dict], list[str]]:
     gain = Decimal(0)
     loss = Decimal(0)
     for p in positions:
-        if p["unrealized"] is None:
+        u = p["unrealized_twd"]
+        if u is None:
             continue
-        if p["currency"] == "USD":
-            if fx is None:
-                continue
-            u = p["unrealized"] * fx
-        else:
-            u = p["unrealized"]
         if u >= 0:
             gain += u
         else:

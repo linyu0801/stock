@@ -240,7 +240,7 @@ export const PositionsTable: React.FC = () => {
                   </tr>
                   {open && (
                     <tr className="border-b border-border bg-muted/40">
-                      <td colSpan={9} className="px-5 pb-3 pt-1">
+                      <td colSpan={9} className="px-5 py-2">
                         <RowActions
                           onTrade={side => setTradeTarget({ symbol: p.symbol, side })}
                           onLeverage={() => setLeverageTarget(p)}
@@ -300,7 +300,7 @@ export const PositionsTable: React.FC = () => {
                 </div>
               </div>
               {open && (
-                <div className="px-6 pb-3 bg-muted/40">
+                <div className="px-6 py-2 bg-muted/40">
                   <RowActions
                     onTrade={side => setTradeTarget({ symbol: p.symbol, side })}
                     onLeverage={() => setLeverageTarget(p)}

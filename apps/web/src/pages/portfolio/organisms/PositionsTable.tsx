@@ -1,11 +1,13 @@
-import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getPortfolioPositions, setLeverage, clearLeverage, type Position } from "@taiwan-stock/api-client";
+import { Fragment, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { getPortfolioPositions, type Position, type PortfolioSide } from "@taiwan-stock/api-client";
 import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
 import { formatPrice, formatPercent, gainLossClass } from "@/shared/lib/format";
 import { Skeleton } from "@/shared/ui/atoms/skeleton";
 import { Button } from "@/shared/ui/atoms/button";
-import { Input } from "@/shared/ui/atoms/input";
+import { LeverageModal } from "../molecules/LeverageModal";
+import { TransactionModal } from "../molecules/TransactionModal";
 
 const fmt = (n: number | null) => (n == null ? "—" : formatPrice(n));
 
@@ -23,14 +25,54 @@ const sortValOf = (p: Position, key: SortKey): string | number | null => {
   return p.factor;
 };
 
+type ActionsProps = {
+  onTrade: (side: PortfolioSide) => void;
+  onLeverage: () => void;
+};
+
+const RowActions: React.FC<ActionsProps> = ({ onTrade, onLeverage }) => (
+  <div className="flex flex-wrap gap-2">
+    <Button size="xs" onClick={() => onTrade("sell")}>賣出</Button>
+    <Button size="xs" variant="secondary" onClick={() => onTrade("buy")}>買進</Button>
+    <Button size="xs" variant="ghost" onClick={onLeverage}>調整槓桿</Button>
+  </div>
+);
+
+type FactorProps = { p: Position };
+
+const FactorChip: React.FC<FactorProps> = ({ p }) =>
+  p.factor === 1 && !p.factor_overridden ? (
+    <span className="text-muted-foreground">—</span>
+  ) : (
+    <span
+      className="rounded-full bg-accent text-accent-foreground px-1.5 py-0.5 text-[11px] font-semibold"
+      title={p.factor_overridden ? "手動設定的倍數" : "由代號自動判定"}
+    >
+      {p.factor}x{p.factor_overridden ? "*" : ""}
+    </span>
+  );
+
+type SymbolProps = { symbol: string };
+
+const SymbolLink: React.FC<SymbolProps> = ({ symbol }) => (
+  <Link
+    to="/stock/$id"
+    params={{ id: symbol }}
+    onClick={e => e.stopPropagation()}   // 列本身是展開觸發器，點代號只導頁
+    className="font-mono font-semibold no-underline text-foreground hover:text-primary"
+  >
+    {symbol}
+  </Link>
+);
+
 export const PositionsTable: React.FC = () => {
-  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["portfolio", "positions"],
     queryFn: getPortfolioPositions,
   });
-  const [editingSymbol, setEditingSymbol] = useState<string | null>(null);
-  const [factorInput, setFactorInput] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [tradeTarget, setTradeTarget] = useState<{ symbol: string; side: PortfolioSide } | null>(null);
+  const [leverageTarget, setLeverageTarget] = useState<Position | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "symbol", dir: 1 });
   const [collapsed, setCollapsed] = useState(false);
 
@@ -39,20 +81,13 @@ export const PositionsTable: React.FC = () => {
       ? { key, dir: (s.dir * -1) as 1 | -1 }
       : { key, dir: key === "symbol" ? 1 : -1 });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["portfolio"] });
+  const toggleExpand = (symbol: string) => setExpanded(s => (s === symbol ? null : symbol));
 
-  const confirmFactor = async (symbol: string) => {
-    const value = Number(factorInput);
-    if (!Number.isNaN(value)) {
-      await setLeverage(symbol, value);
-      invalidate();
+  const rowKeyDown = (e: React.KeyboardEvent, symbol: string) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleExpand(symbol);
     }
-    setEditingSymbol(null);
-  };
-
-  const restoreFactor = async (symbol: string) => {
-    await clearLeverage(symbol);
-    invalidate();
   };
 
   if (isLoading || !data) {
@@ -66,41 +101,6 @@ export const PositionsTable: React.FC = () => {
       </div>
     );
   }
-
-  const factorCell = (p: Position) =>
-    editingSymbol === p.symbol ? (
-      <div className="flex items-center justify-end gap-1">
-        <Input
-          type="number"
-          step="0.5"
-          autoFocus
-          onFocus={e => e.target.select()}
-          value={factorInput}
-          onChange={e => setFactorInput(e.target.value)}
-          className="w-16 h-6 text-right text-xs px-1"
-        />
-        <Button size="xs" onClick={() => confirmFactor(p.symbol)}>確認</Button>
-        <Button size="xs" variant="ghost" onClick={() => setEditingSymbol(null)}>取消</Button>
-      </div>
-    ) : (
-      <div className="flex items-center justify-end gap-1">
-        <Button
-          size="xs"
-          variant="ghost"
-          title="槓桿倍數：曝險＝市值×倍數，點擊修改"
-          onClick={() => { setEditingSymbol(p.symbol); setFactorInput(String(p.factor)); }}
-        >
-          {p.factor === 1 && !p.factor_overridden ? "—" : (
-            <span className="rounded-full bg-accent text-accent-foreground px-1.5 py-0.5 text-[11px] font-semibold">
-              {p.factor}x{p.factor_overridden ? "*" : ""}
-            </span>
-          )}
-        </Button>
-        {p.factor_overridden && (
-          <Button size="xs" variant="ghost" onClick={() => restoreFactor(p.symbol)}>還原</Button>
-        )}
-      </div>
-    );
 
   const { gain, loss, net } = data.unrealized;
 
@@ -189,42 +189,66 @@ export const PositionsTable: React.FC = () => {
           <tbody>
             {sorted.map(p => {
               const pct = unrealizedPctOf(p);
+              const open = expanded === p.symbol;
               return (
-                <tr key={p.symbol} className="border-b border-border last:border-0">
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-mono font-semibold">{p.symbol}</span>
-                      {p.currency === "USD" && (
-                        <span className="rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">USD</span>
+                <Fragment key={p.symbol}>
+                  <tr
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={open}
+                    onClick={() => toggleExpand(p.symbol)}
+                    onKeyDown={e => rowKeyDown(e, p.symbol)}
+                    className={`border-b border-border cursor-pointer transition-colors hover:bg-muted/40 ${open ? "bg-muted/40" : ""}`}
+                  >
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-1.5">
+                        <ChevronDown
+                          size={12}
+                          className={`shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none ${open ? "" : "-rotate-90"}`}
+                        />
+                        <SymbolLink symbol={p.symbol} />
+                        {p.currency === "USD" && (
+                          <span className="rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">USD</span>
+                        )}
+                      </div>
+                      <div className="pl-[18px] text-xs text-muted-foreground">{p.name}</div>
+                    </td>
+                    <td className="text-right px-3 py-2 tabular-nums">{p.quantity.toLocaleString("zh-TW")}</td>
+                    <td className="text-right px-3 py-2 tabular-nums">{formatPrice(p.avg_cost)}</td>
+                    <td className="text-right px-3 py-2 tabular-nums">{fmt(p.close)}</td>
+                    <td className="text-right px-3 py-2 tabular-nums">
+                      <div>{fmt(p.avg_cost * p.quantity)}</div>
+                      {p.currency === "USD" && p.cost_twd != null && (
+                        <div className="text-xs text-muted-foreground">≈ {formatPrice(p.cost_twd)}</div>
                       )}
-                    </div>
-                    <div className="text-xs text-muted-foreground">{p.name}</div>
-                  </td>
-                  <td className="text-right px-3 py-2 tabular-nums">{p.quantity.toLocaleString("zh-TW")}</td>
-                  <td className="text-right px-3 py-2 tabular-nums">{formatPrice(p.avg_cost)}</td>
-                  <td className="text-right px-3 py-2 tabular-nums">{fmt(p.close)}</td>
-                  <td className="text-right px-3 py-2 tabular-nums">
-                    <div>{fmt(p.avg_cost * p.quantity)}</div>
-                    {p.currency === "USD" && p.cost_twd != null && (
-                      <div className="text-xs text-muted-foreground">≈ {formatPrice(p.cost_twd)}</div>
-                    )}
-                  </td>
-                  <td className="text-right px-3 py-2 tabular-nums">
-                    <div>{fmt(p.market_value)}</div>
-                    {p.currency === "USD" && p.market_value_twd != null && (
-                      <div className="text-xs text-muted-foreground">≈ {formatPrice(p.market_value_twd)}</div>
-                    )}
-                  </td>
-                  <td className={`text-right px-3 py-2 tabular-nums ${p.unrealized != null ? gainLossClass(p.unrealized) : ""}`}>
-                    <div>{pct == null ? "—" : formatPercent(pct)}</div>
-                    {p.unrealized != null && <div className="text-xs opacity-75">{formatPrice(p.unrealized)}</div>}
-                    {p.currency === "USD" && p.unrealized_twd != null && (
-                      <div className="text-xs opacity-60">≈ {formatPrice(p.unrealized_twd)}</div>
-                    )}
-                  </td>
-                  <td className={`text-right px-3 py-2 tabular-nums ${gainLossClass(p.realized)}`}>{formatPrice(p.realized)}</td>
-                  <td className="text-right px-3 py-2 tabular-nums">{factorCell(p)}</td>
-                </tr>
+                    </td>
+                    <td className="text-right px-3 py-2 tabular-nums">
+                      <div>{fmt(p.market_value)}</div>
+                      {p.currency === "USD" && p.market_value_twd != null && (
+                        <div className="text-xs text-muted-foreground">≈ {formatPrice(p.market_value_twd)}</div>
+                      )}
+                    </td>
+                    <td className={`text-right px-3 py-2 tabular-nums ${p.unrealized != null ? gainLossClass(p.unrealized) : ""}`}>
+                      <div>{pct == null ? "—" : formatPercent(pct)}</div>
+                      {p.unrealized != null && <div className="text-xs opacity-75">{formatPrice(p.unrealized)}</div>}
+                      {p.currency === "USD" && p.unrealized_twd != null && (
+                        <div className="text-xs opacity-60">≈ {formatPrice(p.unrealized_twd)}</div>
+                      )}
+                    </td>
+                    <td className={`text-right px-3 py-2 tabular-nums ${gainLossClass(p.realized)}`}>{formatPrice(p.realized)}</td>
+                    <td className="text-right px-3 py-2 tabular-nums"><FactorChip p={p} /></td>
+                  </tr>
+                  {open && (
+                    <tr className="border-b border-border bg-muted/40">
+                      <td colSpan={9} className="px-5 pb-3 pt-1">
+                        <RowActions
+                          onTrade={side => setTradeTarget({ symbol: p.symbol, side })}
+                          onLeverage={() => setLeverageTarget(p)}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
           </tbody>
@@ -235,32 +259,54 @@ export const PositionsTable: React.FC = () => {
       <ul className="md:hidden divide-y divide-border list-none m-0 p-0">
         {sorted.map(p => {
           const pct = unrealizedPctOf(p);
+          const open = expanded === p.symbol;
           return (
-            <li key={p.symbol} className="px-4 py-3 flex items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-mono font-semibold">{p.symbol}</span>
-                  {p.currency === "USD" && (
-                    <span className="rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">USD</span>
-                  )}
-                  {(p.factor !== 1 || p.factor_overridden) && (
-                    <span className="rounded-full bg-accent text-accent-foreground px-1.5 py-0.5 text-[11px] font-semibold">
-                      {p.factor}x
-                    </span>
+            <li key={p.symbol}>
+              <div
+                role="button"
+                tabIndex={0}
+                aria-expanded={open}
+                onClick={() => toggleExpand(p.symbol)}
+                onKeyDown={e => rowKeyDown(e, p.symbol)}
+                className={`px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors ${open ? "bg-muted/40" : ""}`}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <ChevronDown
+                      size={12}
+                      className={`shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none ${open ? "" : "-rotate-90"}`}
+                    />
+                    <SymbolLink symbol={p.symbol} />
+                    {p.currency === "USD" && (
+                      <span className="rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">USD</span>
+                    )}
+                    {(p.factor !== 1 || p.factor_overridden) && (
+                      <span className="rounded-full bg-accent text-accent-foreground px-1.5 py-0.5 text-[11px] font-semibold">
+                        {p.factor}x
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">{p.name}</div>
+                  <div className="text-xs text-muted-foreground tabular-nums">
+                    {p.quantity.toLocaleString("zh-TW")} · 均 {formatPrice(p.avg_cost)} · 現 {p.close == null ? "—" : formatPrice(p.close)} · 成本 {formatPrice(p.avg_cost * p.quantity)}
+                  </div>
+                </div>
+                <div className={`text-right tabular-nums ${p.unrealized != null ? gainLossClass(p.unrealized) : ""}`}>
+                  <div className="text-sm font-medium">{pct == null ? "—" : formatPercent(pct)}</div>
+                  {p.unrealized != null && <div className="text-xs opacity-75">{formatPrice(p.unrealized)}</div>}
+                  {p.currency === "USD" && p.unrealized_twd != null && (
+                    <div className="text-xs opacity-60">≈ {formatPrice(p.unrealized_twd)}</div>
                   )}
                 </div>
-                <div className="text-xs text-muted-foreground truncate">{p.name}</div>
-                <div className="text-xs text-muted-foreground tabular-nums">
-                  {p.quantity.toLocaleString("zh-TW")} · 均 {formatPrice(p.avg_cost)} · 現 {p.close == null ? "—" : formatPrice(p.close)} · 成本 {formatPrice(p.avg_cost * p.quantity)}
+              </div>
+              {open && (
+                <div className="px-6 pb-3 bg-muted/40">
+                  <RowActions
+                    onTrade={side => setTradeTarget({ symbol: p.symbol, side })}
+                    onLeverage={() => setLeverageTarget(p)}
+                  />
                 </div>
-              </div>
-              <div className={`text-right tabular-nums ${p.unrealized != null ? gainLossClass(p.unrealized) : ""}`}>
-                <div className="text-sm font-medium">{pct == null ? "—" : formatPercent(pct)}</div>
-                {p.unrealized != null && <div className="text-xs opacity-75">{formatPrice(p.unrealized)}</div>}
-                {p.currency === "USD" && p.unrealized_twd != null && (
-                  <div className="text-xs opacity-60">≈ {formatPrice(p.unrealized_twd)}</div>
-                )}
-              </div>
+              )}
             </li>
           );
         })}
@@ -268,6 +314,19 @@ export const PositionsTable: React.FC = () => {
           </>
         )}
       </div>
+
+      {tradeTarget && (
+        <TransactionModal open initial={null} prefill={tradeTarget} onClose={() => setTradeTarget(null)} />
+      )}
+      {leverageTarget && (
+        <LeverageModal
+          open
+          symbol={leverageTarget.symbol}
+          factor={leverageTarget.factor}
+          overridden={leverageTarget.factor_overridden}
+          onClose={() => setLeverageTarget(null)}
+        />
+      )}
     </div>
   );
 };

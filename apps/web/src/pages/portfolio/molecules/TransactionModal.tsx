@@ -17,6 +17,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   initial: PortfolioTransaction | null; // null = 新增
+  prefill?: { symbol: string; side: PortfolioSide }; // 從庫存列開新增時帶入，只在 initial 為 null 時生效
 };
 
 const SIDE_OPTIONS: { value: PortfolioSide; label: string }[] = [
@@ -33,12 +34,12 @@ const selectAll = (e: React.FocusEvent<HTMLInputElement>) => e.target.select();
 // 台股代號才自動帶台股費率；其他標的（加密貨幣、美股…）費用自填
 const isTwSymbol = (s: string) => /^\d{4,6}[A-Z]?$/.test(s.trim().toUpperCase());
 
-export const TransactionModal: React.FC<Props> = ({ open, onClose, initial }) => {
+export const TransactionModal: React.FC<Props> = ({ open, onClose, initial, prefill }) => {
   const queryClient = useQueryClient();
   const { data: accounts } = useQuery({ queryKey: ["portfolio", "accounts"], queryFn: getPortfolioAccounts });
 
-  const [symbol, setSymbol] = useState(initial?.symbol ?? "");
-  const [side, setSide] = useState<PortfolioSide>(initial?.side ?? "buy");
+  const [symbol, setSymbol] = useState(initial?.symbol ?? prefill?.symbol ?? "");
+  const [side, setSide] = useState<PortfolioSide>(initial?.side ?? prefill?.side ?? "buy");
   const [tradedAt, setTradedAt] = useState(initial?.traded_at ?? todayStr());
   const [quantity, setQuantity] = useState(initial ? String(initial.quantity) : "");
   const [price, setPrice] = useState(initial ? String(initial.price) : "");

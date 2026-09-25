@@ -17,6 +17,7 @@ export const StockSearchCombobox: React.FC<Props> = ({ onSelect, placeholder = "
   const setText = controlled ? onChange! : setQuery;
 
   const [results, setResults] = useState<{ symbol: string; name: string }[]>([]);
+  const [typed, setTyped] = useState(false);  // 帶入初值（編輯／從庫存開賣出）時不該自己彈出選單
   const [open, setOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -25,6 +26,7 @@ export const StockSearchCombobox: React.FC<Props> = ({ onSelect, placeholder = "
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
+    if (!typed) return;
     if (!text.trim()) { setResults([]); setOpen(false); return; }
     timer.current = setTimeout(async () => {
       try {
@@ -36,7 +38,7 @@ export const StockSearchCombobox: React.FC<Props> = ({ onSelect, placeholder = "
       }
     }, 300);  // 本地查無時會 fallback 打 Yahoo，debounce 拉長避免逐字觸發外呼
     return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [text]);
+  }, [text, typed]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -69,7 +71,7 @@ export const StockSearchCombobox: React.FC<Props> = ({ onSelect, placeholder = "
       <input
         ref={inputRef}
         value={text}
-        onChange={e => setText(e.target.value)}
+        onChange={e => { setTyped(true); setText(e.target.value); }}
         onFocus={handleFocus}
         onKeyDown={e => { if (e.key === "Escape") setOpen(false); }}
         placeholder={placeholder}
